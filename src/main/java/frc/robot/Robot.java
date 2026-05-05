@@ -86,7 +86,11 @@ public class Robot extends TimedRobot {
   double xRC_SlowMode;
   double MecanumMove;
   double MecanumStrafe;
-  double MecanumRotacion;
+  double MecanumRotacionRAW;
+  double MecanumRotacionPID;
+  Rotation2d AngleError;
+  Rotation2d AngleTarget;
+  
 
   SparkMax Shooter = new SparkMax(9, MotorType.kBrushless);
   SparkMaxConfig ShooterConfig = new SparkMaxConfig();
@@ -96,6 +100,8 @@ public class Robot extends TimedRobot {
   Encoder FrontRightEncoder = new Encoder(4,5,true, Encoder.EncodingType.k4X);
   Encoder BackRightEncoder = new Encoder(6,7,true, Encoder.EncodingType.k4X); //SIX SEVEN...?
 
+  //PID Chassis
+  PIDController pidChassis = new PIDController(0.018, 0.00, 0.00);
 
   // PID por rueda
   PIDController pidFL = new PIDController(0.9, 0.0, 0.0001);
@@ -160,6 +166,11 @@ public class Robot extends TimedRobot {
     BackRightEncoder.setDistancePerPulse(1.0 / 360 * (Math.PI * 6) * 0.0254); //Conversión
     BackRightEncoder.setMinRate(10);
     BackRightEncoder.reset();
+
+    pidChassis.enableContinuousInput(-180.0f, 180.0f);
+    pidChassis.setIntegratorRange(-1.0, 1.0);
+    pidChassis.setTolerance(2.0f);
+    pidChassis.isContinuousInputEnabled();
 
     ChasisMecanum = new MecanumDrive(FrontLeft, BackLeft, FrontRight, BackRight);
     Translation2d frontLeftLocation = new Translation2d(-0.29, 0.29);
@@ -356,12 +367,23 @@ public class Robot extends TimedRobot {
     //Variables Básicas Chasis y Rotaciones Estándar y PID
     MecanumMove = (-ControlCero.getLeftY()) ;
     MecanumStrafe = ControlCero.getLeftX() * xRC_SlowMode;
-    MecanumRotacion = ControlCero.getRightX() * xRC_SlowMode;
+    MecanumRotacionRAW = ControlCero.getRightX();
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
     Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
 
+//FIXME update setpoint when ACTUALLY rotating by controller.
+    //PID Straightmove
+    if (Math.abs(MecanumRotacionRAW) > 0.02){
+      AngleTarget = AnguloNavX;
+      MecanumRotacionPID = MecanumRotacionRAW * xRC_SlowMode;
+    }
+
+    else{
+      MecanumRotacionPID = MecanumRotacionRAW + (pidChassis.calculate(navx.getAngle()));
+    }
+
     //PIDFF
-    ChassisSpeeds chassisSpeeds = new ChassisSpeeds(MecanumMove*kMaxSpeedWheel, MecanumStrafe*-kMaxSpeedWheel, MecanumRotacion*-kMaxSpeedWheel);
+    ChassisSpeeds chassisSpeeds = new ChassisSpeeds(MecanumMove*kMaxSpeedWheel, MecanumStrafe*-kMaxSpeedWheel, MecanumRotacionPID*-kMaxSpeedWheel);
     chassisSpeeds = ChassisSpeeds.fromFieldRelativeSpeeds(chassisSpeeds.vxMetersPerSecond, chassisSpeeds.vyMetersPerSecond, chassisSpeeds.omegaRadiansPerSecond, Heading);
     MecanumDriveWheelSpeeds wheelSpeeds = xRC_Kinematics.toWheelSpeeds(chassisSpeeds);
     wheelSpeeds.desaturate(kMaxSpeedWheel);
@@ -414,8 +436,9 @@ public class Robot extends TimedRobot {
     BackLeft.set(OutputRL);
     BackRight.set(OutputRR);
 
+
     //Drivetrain
-    ChasisMecanum.driveCartesian(MecanumMove, MecanumStrafe, MecanumRotacion, AnguloNavX);
+    ChasisMecanum.driveCartesian(MecanumMove, MecanumStrafe, MecanumRotacionPID, AnguloNavX);
 
     //Reset NAVX
     if (ControlCero.getStartButton() == true) {
