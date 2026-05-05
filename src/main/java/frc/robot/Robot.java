@@ -7,15 +7,19 @@ package frc.robot;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.kinematics.MecanumDriveKinematics;
 import edu.wpi.first.math.kinematics.MecanumDriveOdometry;
 import edu.wpi.first.math.kinematics.MecanumDriveWheelPositions;
+import edu.wpi.first.math.kinematics.MecanumDriveWheelSpeeds;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.Encoder;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.XboxController;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.wpilibj.drive.MecanumDrive;
@@ -57,6 +61,7 @@ public class Robot extends TimedRobot {
   int BackLeftID = 3;
   int FrontRightID = 4;
   int FrontLeftID = 5;
+  double kMaxSpeedWheel = 6.0;
 
   SparkMax BackRight = new SparkMax(BackRightID, MotorType.kBrushed);
   SparkMax BackLeft = new SparkMax(BackLeftID, MotorType.kBrushed);
@@ -78,7 +83,7 @@ public class Robot extends TimedRobot {
   Timer kronos = new Timer(); //KORG referencia!
 
   double RotAuto;
-  double chasisVelo;
+  double xRC_SlowMode;
   double MecanumMove;
   double MecanumStrafe;
   double MecanumRotacion;
@@ -157,14 +162,14 @@ public class Robot extends TimedRobot {
     BackRightEncoder.reset();
 
     ChasisMecanum = new MecanumDrive(FrontLeft, BackLeft, FrontRight, BackRight);
-    Translation2d frontLeftLocation = new Translation2d(-0.29, 0.29); // Posición del motor delantero izquierdo  metros
-    Translation2d rearLeftLocation = new Translation2d(-0.29, -0.29); // Posición del motor trasero izquierdo metros
-    Translation2d frontRightLocation = new Translation2d(0.29, 0.29); // Posición del motor delantero derecho en metros
-    Translation2d rearRightLocation = new Translation2d(0.29, -0.29); // Posición del motor trasero derecho en metros
+    Translation2d frontLeftLocation = new Translation2d(-0.29, 0.29);
+    Translation2d frontRightLocation = new Translation2d(0.29, 0.29);
+    Translation2d rearLeftLocation = new Translation2d(-0.29, -0.29);
+    Translation2d rearRightLocation = new Translation2d(0.29, -0.29);
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
     Pose2d initialPose = new Pose2d(0,0, AnguloNavX);
 
-    MecanumDriveWheelPositions initialWheelPositions = new MecanumDriveWheelPositions(FrontLeftEncoder.getDistance(),FrontRightEncoder.getDistance(),BackLeftEncoder.getDistance(),BackLeftEncoder.getDistance());
+    MecanumDriveWheelPositions initialWheelPositions = new MecanumDriveWheelPositions(FrontLeftEncoder.getDistance(),FrontRightEncoder.getDistance(),BackLeftEncoder.getDistance(),BackRightEncoder.getDistance());
 
     xRC_Kinematics = new MecanumDriveKinematics(frontLeftLocation, frontRightLocation, rearLeftLocation, rearRightLocation);
     xRC_Odometry = new MecanumDriveOdometry(xRC_Kinematics, AnguloNavX, initialWheelPositions, initialPose);
@@ -186,22 +191,22 @@ public class Robot extends TimedRobot {
   @Override
   public void robotPeriodic() {
 
+    // Store the angle in a variable to avoid redundant calculations
+    Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
 
-        // Actualiza odometría con posiciones en metros
+    // Actualiza odometría con posiciones en metros
     MecanumDriveWheelPositions wheelPositions = new MecanumDriveWheelPositions(
       FrontLeftEncoder.getDistance(),
       FrontRightEncoder.getDistance(),
       BackLeftEncoder.getDistance(),
       BackRightEncoder.getDistance());
 
-    xRC_Odometry.update(Rotation2d.fromDegrees(navx.getAngle()), wheelPositions);
+    xRC_Odometry.update(AnguloNavX, wheelPositions);
 
-
-
-  // Opcional: publicar valores útiles
+    // Opcional: publicar valores útiles
     SmartDashboard.putNumber("Pose X (m)", xRC_Odometry.getPoseMeters().getX());
     SmartDashboard.putNumber("Pose Y (m)", xRC_Odometry.getPoseMeters().getY());
-    SmartDashboard.putNumber("Heading (deg)", (Rotation2d.fromDegrees(navx.getAngle())).getDegrees());
+    SmartDashboard.putNumber("Heading (deg)", AnguloNavX.getDegrees());
     SmartDashboard.putData("Chasis", ChasisMecanum);
     SmartDashboard.putNumber("Encoder FrontLeft", FrontLeftEncoder.getDistance());
     SmartDashboard.putNumber("Encoder FrontRight", FrontRightEncoder.getDistance());
@@ -337,7 +342,7 @@ public class Robot extends TimedRobot {
   /** This function is called once when teleop is enabled. */
   @Override
   public void teleopInit() {
-    chasisVelo = 1.0;
+    xRC_SlowMode = 1.0;
     FrontLeftEncoder.reset();
     FrontRightEncoder.reset();
     BackLeftEncoder.reset();
@@ -348,22 +353,81 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopPeriodic() {
 
-    MecanumMove = (-ControlCero.getLeftY()) * chasisVelo;
-    MecanumStrafe = ControlCero.getLeftX() * chasisVelo;
-    MecanumRotacion = ControlCero.getRightX() * chasisVelo;
-
-
+    //Variables Básicas Chasis y Rotaciones Estándar y PID
+    MecanumMove = (-ControlCero.getLeftY()) ;
+    MecanumStrafe = ControlCero.getLeftX() * xRC_SlowMode;
+    MecanumRotacion = ControlCero.getRightX() * xRC_SlowMode;
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
+    Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
+
+    //PIDFF
+    ChassisSpeeds chassisSpeeds = new ChassisSpeeds(MecanumMove*kMaxSpeedWheel, MecanumStrafe*-kMaxSpeedWheel, MecanumRotacion*-kMaxSpeedWheel);
+    chassisSpeeds = ChassisSpeeds.fromFieldRelativeSpeeds(chassisSpeeds.vxMetersPerSecond, chassisSpeeds.vyMetersPerSecond, chassisSpeeds.omegaRadiansPerSecond, Heading);
+    MecanumDriveWheelSpeeds wheelSpeeds = xRC_Kinematics.toWheelSpeeds(chassisSpeeds);
+    wheelSpeeds.desaturate(kMaxSpeedWheel);
+
+    //Velocidad Meta
+    double MetaFL = wheelSpeeds.frontLeftMetersPerSecond;
+    double MetaFR = wheelSpeeds.frontRightMetersPerSecond;
+    double MetaRL = wheelSpeeds.rearLeftMetersPerSecond;
+    double MetaRR = wheelSpeeds.rearRightMetersPerSecond;
+    
+    //Velocidad Actual (mps)
+    double RealFL = FrontLeftEncoder.getRate();
+    double RealFR = FrontRightEncoder.getRate();
+    double RealRL = BackLeftEncoder.getRate();
+    double RealRR = BackRightEncoder.getRate();
+
+    //PID (Unitless por sí solo)
+    double FL_PID = pidFL.calculate(RealFL, MetaFL);
+    double FR_PID = pidFR.calculate(RealFR, MetaFR);
+    double RL_PID = pidRL.calculate(RealRL, MetaRL);
+    double RR_PID = pidRR.calculate(RealRR, MetaRR);
+
+    //FeedForward (En VOLTS)
+    double FL_FF = ffFL.calculate(MetaFL);
+    double FR_FF = ffFR.calculate(MetaFR);
+    double RL_FF = ffRL.calculate(MetaRL);
+    double RR_FF = ffRR.calculate(MetaRR);
+
+    //Combinación (VOLTS)
+    double VoltsFL = FL_FF + FL_PID;
+    double VoltsFR = FR_FF + FR_PID;
+    double VoltsRL = RL_FF + RL_PID;
+    double VoltsRR = RR_FF + RR_PID;
+
+    //Compensación por estatus de bateria
+    double pila = RobotController.getBatteryVoltage();
+    double PercentFL = MathUtil.clamp(VoltsFL/pila, -1.0, 1.0);
+    double PercentFR = MathUtil.clamp(VoltsFR/pila, -1.0, 1.0);
+    double PercentRL = MathUtil.clamp(VoltsRL/pila, -1.0, 1.0);
+    double PercentRR = MathUtil.clamp(VoltsRR/pila, -1.0, 1.0);
+
+    //Establecer motores PID
+    double OutputFL = PercentFL;
+    double OutputFR = PercentFR;
+    double OutputRL = PercentRL;
+    double OutputRR = PercentRR;
+
+    FrontLeft.set(OutputFL);
+    FrontRight.set(OutputFR);
+    BackLeft.set(OutputRL);
+    BackRight.set(OutputRR);
+
+    //Drivetrain
     ChasisMecanum.driveCartesian(MecanumMove, MecanumStrafe, MecanumRotacion, AnguloNavX);
 
+    //Reset NAVX
     if (ControlCero.getStartButton() == true) {
       navx.reset();
     }   
 
+
+    //SlowMode estilo xRC
     if ((ControlCero.getLeftBumperButton() == true) || (ControlCero.getRightBumperButton() == true)) {
-      chasisVelo = 0.5;
+      xRC_SlowMode = 0.5;
     } else {
-      chasisVelo = 1;
+      xRC_SlowMode = 1;
     }
 
     if (ControlCero.getYButton() == true){
