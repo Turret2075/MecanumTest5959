@@ -1,6 +1,7 @@
 // Copyright (c) FIRST and other WPILib contributors.
 // Open Source Software; you can modify and/or share it under the terms of
 // the WPILib BSD license file in the root directory of this project.
+//Code by Turret2075, this is my first FRC Java code.
 
 package frc.robot;
 
@@ -374,13 +375,12 @@ public class Robot extends TimedRobot {
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
     Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
 
-    //FIXME update setpoint when ACTUALLY rotating by controller.
+
     //PID Straightmove
     if (Math.abs(MecanumRotacionRAW) > 0.02){
       AngleTarget = AnguloNavX.getDegrees();
       MecanumRotacionPID = MecanumRotacionRAW * xRC_SlowMode;
     }
-
     else{
       MecanumRotacionPID = MecanumRotacionRAW + (pidChassis.calculate(navx.getAngle(), AngleTarget));
     }
