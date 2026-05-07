@@ -88,8 +88,7 @@ public class Robot extends TimedRobot {
   double MecanumStrafe;
   double MecanumRotacionRAW;
   double MecanumRotacionPID;
-  Rotation2d AngleError;
-  Rotation2d AngleTarget;
+  double AngleTarget;
   
 
   SparkMax Shooter = new SparkMax(9, MotorType.kBrushless);
@@ -101,7 +100,7 @@ public class Robot extends TimedRobot {
   Encoder BackRightEncoder = new Encoder(6,7,true, Encoder.EncodingType.k4X); //SIX SEVEN...?
 
   //PID Chassis
-  PIDController pidChassis = new PIDController(0.018, 0.00, 0.00);
+  PIDController pidChassis = new PIDController(0.019, 0.00, 0.00001);
 
   // PID por rueda
   PIDController pidFL = new PIDController(0.9, 0.0, 0.0001);
@@ -146,7 +145,6 @@ public class Robot extends TimedRobot {
     Shooter.configure(ShooterConfig, SparkBase.ResetMode.kResetSafeParameters,
         SparkBase.PersistMode.kPersistParameters);
 
-
     FrontLeftEncoder.setSamplesToAverage(10);
     FrontLeftEncoder.setDistancePerPulse(1.0 / 360 * (Math.PI * 6) * 0.0254); //Conversión
     FrontLeftEncoder.setMinRate(10);
@@ -173,14 +171,19 @@ public class Robot extends TimedRobot {
     pidChassis.isContinuousInputEnabled();
 
     ChasisMecanum = new MecanumDrive(FrontLeft, BackLeft, FrontRight, BackRight);
-    Translation2d frontLeftLocation = new Translation2d(-0.29, 0.29);
-    Translation2d frontRightLocation = new Translation2d(0.29, 0.29);
-    Translation2d rearLeftLocation = new Translation2d(-0.29, -0.29);
-    Translation2d rearRightLocation = new Translation2d(0.29, -0.29);
+    Translation2d frontLeftLocation = new Translation2d(0.29, 0.29);
+    Translation2d frontRightLocation = new Translation2d(0.29, -.29);
+    Translation2d rearLeftLocation = new Translation2d(-0.29, 0.29);
+    Translation2d rearRightLocation = new Translation2d(-0.29, -0.29);
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
     Pose2d initialPose = new Pose2d(0,0, AnguloNavX);
-
     MecanumDriveWheelPositions initialWheelPositions = new MecanumDriveWheelPositions(FrontLeftEncoder.getDistance(),FrontRightEncoder.getDistance(),BackLeftEncoder.getDistance(),BackRightEncoder.getDistance());
+
+    ChasisMecanum.setDeadband(0.02);
+    ChasisMecanum.setMaxOutput(1.0);
+    ChasisMecanum.setSafetyEnabled(true);
+    ChasisMecanum.setExpiration(0.1);
+
 
     xRC_Kinematics = new MecanumDriveKinematics(frontLeftLocation, frontRightLocation, rearLeftLocation, rearRightLocation);
     xRC_Odometry = new MecanumDriveOdometry(xRC_Kinematics, AnguloNavX, initialWheelPositions, initialPose);
@@ -371,15 +374,15 @@ public class Robot extends TimedRobot {
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
     Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
 
-//FIXME update setpoint when ACTUALLY rotating by controller.
+    //FIXME update setpoint when ACTUALLY rotating by controller.
     //PID Straightmove
     if (Math.abs(MecanumRotacionRAW) > 0.02){
-      AngleTarget = AnguloNavX;
+      AngleTarget = AnguloNavX.getDegrees();
       MecanumRotacionPID = MecanumRotacionRAW * xRC_SlowMode;
     }
 
     else{
-      MecanumRotacionPID = MecanumRotacionRAW + (pidChassis.calculate(navx.getAngle()));
+      MecanumRotacionPID = MecanumRotacionRAW + (pidChassis.calculate(navx.getAngle(), AngleTarget));
     }
 
     //PIDFF
