@@ -1,0 +1,97 @@
+{
+  "version": "2025.0",
+  "command": {
+    "type": "sequential",
+    "data": {
+      "commands": [
+        {
+          "type": "path",
+          "data": {
+            "pathName": "DeTrenchParaCentro(R1)"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "FirstSwipe(R1)"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "DeCentroParaShootear(R1)"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.2
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "Shoot"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 2.3
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "DeShootearParaOutpost(R1)"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "DeOutpostParaShootear(R1)"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.2
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "Shoot"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 2.3
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "DeShootearParaTower(R1)"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.2
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "PivotStageMax"
+          }
+        }
+      ]
+    }
+  },
+  "resetOdom": true,
+  "folder": null,
+  "choreoAuto": false
+}

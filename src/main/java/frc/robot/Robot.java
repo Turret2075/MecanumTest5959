@@ -15,6 +15,7 @@ import edu.wpi.first.math.kinematics.MecanumDriveWheelPositions;
 import edu.wpi.first.math.kinematics.MecanumDriveWheelSpeeds;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.Encoder;
@@ -94,6 +95,7 @@ public class Robot extends TimedRobot {
   double MecanumRotacionPID;
   double AngleTarget;
   
+  Field2d canchaREBUILT = new Field2d();
 
   SparkMax Shooter = new SparkMax(9, MotorType.kBrushless);
   SparkMax Elevator = new SparkMax(10, MotorType.kBrushless);
@@ -123,6 +125,7 @@ public class Robot extends TimedRobot {
   SimpleMotorFeedforward ffFR = new SimpleMotorFeedforward(0.3, 2.2, 0.25);
   SimpleMotorFeedforward ffRL = new SimpleMotorFeedforward(0.3, 2.2, 0.25);
   SimpleMotorFeedforward ffRR = new SimpleMotorFeedforward(0.3, 2.2, 0.25);
+
 
   //Default
   private static final String kCenterAuto = "Auto Centro";
@@ -205,7 +208,6 @@ public class Robot extends TimedRobot {
     ChasisMecanum.setSafetyEnabled(true);
     ChasisMecanum.setExpiration(0.1);
 
-
     xRC_Kinematics = new MecanumDriveKinematics(frontLeftLocation, frontRightLocation, rearLeftLocation, rearRightLocation);
     xRC_Odometry = new MecanumDriveOdometry(xRC_Kinematics, AnguloNavX, initialWheelPositions, initialPose);
    
@@ -219,7 +221,7 @@ public class Robot extends TimedRobot {
     m_chooser.addOption("Autonomo Pro", kAutoMuyPro);
     SmartDashboard.putData("Auto choices", m_chooser);
     SmartDashboard.putData("NavX", navx);
-
+    SmartDashboard.putData("Field", canchaREBUILT);
   }
 
 
@@ -228,6 +230,7 @@ public class Robot extends TimedRobot {
 
     // Store the angle in a variable to avoid redundant calculations
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
+    Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
 
     // Actualiza odometría con posiciones en metros
     MecanumDriveWheelPositions wheelPositions = new MecanumDriveWheelPositions(
@@ -236,7 +239,8 @@ public class Robot extends TimedRobot {
       BackLeftEncoder.getDistance(),
       BackRightEncoder.getDistance());
 
-    xRC_Odometry.update(AnguloNavX, wheelPositions);
+    xRC_Odometry.update(Heading, wheelPositions);
+    canchaREBUILT.setRobotPose(xRC_Odometry.getPoseMeters());
 
     // Opcional: publicar valores útiles
     SmartDashboard.putNumber("Pose X (m)", xRC_Odometry.getPoseMeters().getX());
