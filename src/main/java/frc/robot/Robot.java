@@ -26,7 +26,9 @@ import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.wpilibj.drive.MecanumDrive;
 
 import com.revrobotics.spark.SparkMax;
+import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.spark.SparkBase;
+import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkMaxConfig;
@@ -43,6 +45,7 @@ import com.studica.frc.AHRS;
     4 . FrontRight
     5 . FrontLeft
     8 . Shooter/Intake
+    9 . Pivot/Elevador
 
 ======================================================
     Red ENCODERS (PuertoA, PuertoB . Dispositivo)
@@ -93,7 +96,9 @@ public class Robot extends TimedRobot {
   
 
   SparkMax Shooter = new SparkMax(9, MotorType.kBrushless);
+  SparkMax Elevator = new SparkMax(10, MotorType.kBrushless);
   SparkMaxConfig ShooterConfig = new SparkMaxConfig();
+  SparkMaxConfig ElevatorConfig = new SparkMaxConfig();
 
   Encoder FrontLeftEncoder = new Encoder(0,1,false, Encoder.EncodingType.k4X);
   Encoder BackLeftEncoder = new Encoder(8,9,false, Encoder.EncodingType.k4X);
@@ -102,6 +107,10 @@ public class Robot extends TimedRobot {
 
   //PID Chassis
   PIDController pidChassis = new PIDController(0.019, 0.00, 0.00001);
+
+  //PID "Shooter?" y "Elevador?"
+  SparkClosedLoopController OrangePID = Shooter.getClosedLoopController();
+  SparkClosedLoopController GreenPID = Elevator.getClosedLoopController();
 
   // PID por rueda
   PIDController pidFL = new PIDController(0.9, 0.0, 0.0001);
@@ -133,7 +142,16 @@ public class Robot extends TimedRobot {
     FrontRightConfig.inverted(false).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
     FrontLeftConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
 
-    ShooterConfig.inverted(false).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
+    ShooterConfig.inverted(false).idleMode(IdleMode.kCoast).smartCurrentLimit(30);
+    ShooterConfig.closedLoop.p(0.001).i(0.0).d(0.0001);
+    ShooterConfig.closedLoop.feedForward.kS(0.0).kV(0.015).kA(0.0).kG(0.0).kCos(0.0).kCosRatio(0.0);
+
+    ElevatorConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(30);
+    ElevatorConfig.closedLoop.p(0.1).i(0.0).d(0.0);
+
+    //PID "Shooter?" y "Elevador?"
+    OrangePID = Shooter.getClosedLoopController();
+    GreenPID = Elevator.getClosedLoopController();
 
     BackRight.configure(BackRightConfig, SparkBase.ResetMode.kResetSafeParameters,
         SparkBase.PersistMode.kPersistParameters);
@@ -144,6 +162,8 @@ public class Robot extends TimedRobot {
     FrontLeft.configure(FrontLeftConfig, SparkBase.ResetMode.kResetSafeParameters,
         SparkBase.PersistMode.kPersistParameters);
     Shooter.configure(ShooterConfig, SparkBase.ResetMode.kResetSafeParameters,
+        SparkBase.PersistMode.kPersistParameters);
+    Elevator.configure(ElevatorConfig, SparkBase.ResetMode.kResetSafeParameters,
         SparkBase.PersistMode.kPersistParameters);
 
     FrontLeftEncoder.setSamplesToAverage(10);
@@ -227,6 +247,8 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("Encoder FrontRight", FrontRightEncoder.getDistance());
     SmartDashboard.putNumber("Encoder BackLeft", BackLeftEncoder.getDistance());
     SmartDashboard.putNumber("Encoder BackRight", BackRightEncoder.getDistance());
+    SmartDashboard.putNumber("Elevador", Elevator.getEncoder().getPosition());
+    SmartDashboard.putNumber("Shooter", Shooter.getEncoder().getVelocity());
   }
 
 
@@ -457,13 +479,26 @@ public class Robot extends TimedRobot {
     }
 
     if (ControlCero.getYButton() == true){
-      Shooter.set(1);
+      OrangePID.setSetpoint(6000, ControlType.kVelocity);
     }
     else if (ControlCero.getXButton() == true){
-      Shooter.set(-0.3);
+      OrangePID.setSetpoint(-2500, ControlType.kVelocity);
     }
     else{
       Shooter.set(0);
+    }
+
+    if (ControlCero.getBButton() == true){
+      GreenPID.setSetpoint(0, ControlType.kPosition);
+    }
+    else if (ControlCero.getAButton() == true){
+      GreenPID.setSetpoint(240, ControlType.kPosition);
+    }
+    else if (ControlCero.getLeftStickButton() == true){
+      GreenPID.setSetpoint(675, ControlType.kPosition);
+    }
+    else if (ControlCero.getRightStickButton() == true){
+      GreenPID.setSetpoint(1000, ControlType.kPosition);
     }
   }
 
