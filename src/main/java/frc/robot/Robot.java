@@ -19,6 +19,7 @@ import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.Encoder;
+import edu.wpi.first.wpilibj.PowerDistribution;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.math.MathUtil;
@@ -28,6 +29,8 @@ import edu.wpi.first.wpilibj.drive.MecanumDrive;
 
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.SparkBase.ControlType;
+
+
 import com.revrobotics.spark.SparkBase;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
@@ -84,6 +87,8 @@ public class Robot extends TimedRobot {
   MecanumDriveOdometry xRC_Odometry;
 
   AHRS navx = new AHRS(AHRS.NavXComType.kMXP_SPI);
+  
+  PowerDistribution pdp = new PowerDistribution(0, PowerDistribution.ModuleType.kCTRE);
 
   Timer kronos = new Timer(); //KORG referencia!
 
@@ -96,6 +101,7 @@ public class Robot extends TimedRobot {
   double AngleTarget;
   
   Field2d canchaREBUILT = new Field2d();
+
 
   SparkMax Shooter = new SparkMax(9, MotorType.kBrushless);
   SparkMax Elevator = new SparkMax(10, MotorType.kBrushless);
@@ -127,6 +133,7 @@ public class Robot extends TimedRobot {
   SimpleMotorFeedforward ffRR = new SimpleMotorFeedforward(0.3, 2.2, 0.25);
 
 
+
   //Default
   private static final String kCenterAuto = "Auto Centro";
   private static final String kTimerAutoDerecha = "Simple Swipe Derecha";
@@ -146,7 +153,7 @@ public class Robot extends TimedRobot {
     FrontLeftConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
 
     ShooterConfig.inverted(false).idleMode(IdleMode.kCoast).smartCurrentLimit(30);
-    ShooterConfig.closedLoop.p(0.001).i(0.0).d(0.0001);
+    ShooterConfig.closedLoop.p(0.0001).i(0.00001).d(0.001);
     ShooterConfig.closedLoop.feedForward.kS(0.0).kV(0.015).kA(0.0).kG(0.0).kCos(0.0).kCosRatio(0.0);
 
     ElevatorConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(30);
@@ -212,6 +219,8 @@ public class Robot extends TimedRobot {
     xRC_Odometry = new MecanumDriveOdometry(xRC_Kinematics, AnguloNavX, initialWheelPositions, initialPose);
    
 
+
+
     //Default
     m_chooser.setDefaultOption("Centro Use(less)", kCenterAuto);
     m_chooser.addOption("Simple Swipe Full Trench DERECHA", kTimerAutoDerecha);
@@ -247,6 +256,7 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("Pose Y (m)", xRC_Odometry.getPoseMeters().getY());
     SmartDashboard.putNumber("Heading (deg)", AnguloNavX.getDegrees());
     SmartDashboard.putData("Chasis", ChasisMecanum);
+    SmartDashboard.putData("PDP", pdp);
     SmartDashboard.putNumber("Encoder FrontLeft", FrontLeftEncoder.getDistance());
     SmartDashboard.putNumber("Encoder FrontRight", FrontRightEncoder.getDistance());
     SmartDashboard.putNumber("Encoder BackLeft", BackLeftEncoder.getDistance());
@@ -486,7 +496,7 @@ public class Robot extends TimedRobot {
       OrangePID.setSetpoint(6000, ControlType.kVelocity);
     }
     else if (ControlCero.getXButton() == true){
-      OrangePID.setSetpoint(-2500, ControlType.kVelocity);
+      OrangePID.setSetpoint(-1800, ControlType.kVelocity);
     }
     else{
       Shooter.set(0);
