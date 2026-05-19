@@ -19,7 +19,6 @@ import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj.Encoder;
-import edu.wpi.first.wpilibj.PowerDistribution;
 import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.math.MathUtil;
@@ -38,14 +37,15 @@ import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkMaxConfig;
 
 
+
 import com.studica.frc.AHRS;
 /*====================================================
     Red CAN (ID . Dispositivo)
     ==========================
     0 . roboRIO
     
-    2 . BackRight
-    3 . BackLeft
+    2 . RearRight
+    3 . RearLeft
     4 . FrontRight
     5 . FrontLeft
     8 . Shooter/Intake
@@ -54,9 +54,9 @@ import com.studica.frc.AHRS;
 ======================================================
     Red ENCODERS (PuertoA, PuertoB . Dispositivo)
     0, 1 . FrontLeft
-    8, 9 . BackLeft
+    8, 9 . RearLeft
     4, 5 . FrontRight
-    6, 7 . BackRight
+    6, 7 . RearRight
 
 
 
@@ -65,19 +65,19 @@ import com.studica.frc.AHRS;
 
 public class Robot extends TimedRobot {
   //Variables
-  int BackRightID = 2;
-  int BackLeftID = 3;
+  int RearRightID = 2;
+  int RearLeftID = 3;
   int FrontRightID = 4;
   int FrontLeftID = 5;
   double kMaxSpeedWheel = 6.0;
 
-  SparkMax BackRight = new SparkMax(BackRightID, MotorType.kBrushed);
-  SparkMax BackLeft = new SparkMax(BackLeftID, MotorType.kBrushed);
+  SparkMax RearRight = new SparkMax(RearRightID, MotorType.kBrushed);
+  SparkMax RearLeft = new SparkMax(RearLeftID, MotorType.kBrushed);
   SparkMax FrontRight = new SparkMax(FrontRightID, MotorType.kBrushed);
   SparkMax FrontLeft = new SparkMax(FrontLeftID, MotorType.kBrushed);
 
-  SparkMaxConfig BackRightConfig = new SparkMaxConfig();
-  SparkMaxConfig BackLeftConfig = new SparkMaxConfig();
+  SparkMaxConfig RearRightConfig = new SparkMaxConfig();
+  SparkMaxConfig RearLeftConfig = new SparkMaxConfig();
   SparkMaxConfig FrontRightConfig = new SparkMaxConfig();
   SparkMaxConfig FrontLeftConfig = new SparkMaxConfig();
 
@@ -87,9 +87,7 @@ public class Robot extends TimedRobot {
   MecanumDriveOdometry xRC_Odometry;
 
   AHRS navx = new AHRS(AHRS.NavXComType.kMXP_SPI);
-  
-  PowerDistribution pdp = new PowerDistribution(0, PowerDistribution.ModuleType.kCTRE);
-
+  Field2d canchaREBUILT = new Field2d();
   Timer kronos = new Timer(); //KORG referencia!
 
   double RotAuto;
@@ -100,8 +98,12 @@ public class Robot extends TimedRobot {
   double MecanumRotacionPID;
   double AngleTarget;
   
-  Field2d canchaREBUILT = new Field2d();
+  //Start Coordinates
+  double StartInX = 4.525;
+  double StartInY = 0.650;
 
+  //Blue Hub Pose
+  Pose2d BlueHubPose = new Pose2d(4.5, 4.035, new Rotation2d());
 
   SparkMax Shooter = new SparkMax(9, MotorType.kBrushless);
   SparkMax Elevator = new SparkMax(10, MotorType.kBrushless);
@@ -109,12 +111,12 @@ public class Robot extends TimedRobot {
   SparkMaxConfig ElevatorConfig = new SparkMaxConfig();
 
   Encoder FrontLeftEncoder = new Encoder(0,1,false, Encoder.EncodingType.k4X);
-  Encoder BackLeftEncoder = new Encoder(8,9,false, Encoder.EncodingType.k4X);
+  Encoder RearLeftEncoder = new Encoder(8,9,false, Encoder.EncodingType.k4X);
   Encoder FrontRightEncoder = new Encoder(4,5,true, Encoder.EncodingType.k4X);
-  Encoder BackRightEncoder = new Encoder(6,7,true, Encoder.EncodingType.k4X); //SIX SEVEN...?
+  Encoder RearRightEncoder = new Encoder(6,7,true, Encoder.EncodingType.k4X); //SIX SEVEN...?
 
   //PID Chassis
-  PIDController pidChassis = new PIDController(0.019, 0.00, 0.00001);
+  PIDController pidChassis = new PIDController(0.02, 0.00, 0.00001);
 
   //PID "Shooter?" y "Elevador?"
   SparkClosedLoopController OrangePID = Shooter.getClosedLoopController();
@@ -147,25 +149,16 @@ public class Robot extends TimedRobot {
   @SuppressWarnings("removal")
   public Robot() {
     //Motors
-    BackRightConfig.inverted(false).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
-    BackLeftConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
+    RearRightConfig.inverted(false).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
+    RearLeftConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
     FrontRightConfig.inverted(false).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
     FrontLeftConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
 
-    ShooterConfig.inverted(false).idleMode(IdleMode.kCoast).smartCurrentLimit(30);
-    ShooterConfig.closedLoop.p(0.0001).i(0.00001).d(0.001);
-    ShooterConfig.closedLoop.feedForward.kS(0.0).kV(0.015).kA(0.0).kG(0.0).kCos(0.0).kCosRatio(0.0);
+    ShooterConfig.inverted(false).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
 
-    ElevatorConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(30);
-    ElevatorConfig.closedLoop.p(0.1).i(0.0).d(0.0);
-
-    //PID "Shooter?" y "Elevador?"
-    OrangePID = Shooter.getClosedLoopController();
-    GreenPID = Elevator.getClosedLoopController();
-
-    BackRight.configure(BackRightConfig, SparkBase.ResetMode.kResetSafeParameters,
+    RearRight.configure(RearRightConfig, SparkBase.ResetMode.kResetSafeParameters,
         SparkBase.PersistMode.kPersistParameters);
-    BackLeft.configure(BackLeftConfig, SparkBase.ResetMode.kResetSafeParameters,
+    RearLeft.configure(RearLeftConfig, SparkBase.ResetMode.kResetSafeParameters,
         SparkBase.PersistMode.kPersistParameters);
     FrontRight.configure(FrontRightConfig, SparkBase.ResetMode.kResetSafeParameters,
         SparkBase.PersistMode.kPersistParameters);
@@ -181,45 +174,44 @@ public class Robot extends TimedRobot {
     FrontLeftEncoder.setMinRate(10);
     FrontLeftEncoder.reset();
 
-    BackLeftEncoder.setSamplesToAverage(10);
-    BackLeftEncoder.setDistancePerPulse(1.0 / 360 * (Math.PI * 6) * 0.0254); //Conversión
-    BackLeftEncoder.setMinRate(10);
-    BackLeftEncoder.reset();
+    RearLeftEncoder.setSamplesToAverage(10);
+    RearLeftEncoder.setDistancePerPulse(1.0 / 360 * (Math.PI * 6) * 0.0254); //Conversión
+    RearLeftEncoder.setMinRate(10);
+    RearLeftEncoder.reset();
 
     FrontRightEncoder.setSamplesToAverage(10);
     FrontRightEncoder.setDistancePerPulse(1.0 / 360 * (Math.PI * 6) * 0.0254); //Conversión
     FrontRightEncoder.setMinRate(10);
     FrontRightEncoder.reset();
 
-    BackRightEncoder.setSamplesToAverage(10);
-    BackRightEncoder.setDistancePerPulse(1.0 / 360 * (Math.PI * 6) * 0.0254); //Conversión
-    BackRightEncoder.setMinRate(10);
-    BackRightEncoder.reset();
+    RearRightEncoder.setSamplesToAverage(10);
+    RearRightEncoder.setDistancePerPulse(1.0 / 360 * (Math.PI * 6) * 0.0254); //Conversión
+    RearRightEncoder.setMinRate(10);
+    RearRightEncoder.reset();
 
     pidChassis.enableContinuousInput(-180.0f, 180.0f);
     pidChassis.setIntegratorRange(-1.0, 1.0);
     pidChassis.setTolerance(2.0f);
     pidChassis.isContinuousInputEnabled();
 
-    ChasisMecanum = new MecanumDrive(FrontLeft, BackLeft, FrontRight, BackRight);
+    ChasisMecanum = new MecanumDrive(FrontLeft, RearLeft, FrontRight, RearRight);
     Translation2d frontLeftLocation = new Translation2d(0.29, 0.29);
     Translation2d frontRightLocation = new Translation2d(0.29, -.29);
     Translation2d rearLeftLocation = new Translation2d(-0.29, 0.29);
     Translation2d rearRightLocation = new Translation2d(-0.29, -0.29);
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
-    Pose2d initialPose = new Pose2d(0,0, AnguloNavX);
-    MecanumDriveWheelPositions initialWheelPositions = new MecanumDriveWheelPositions(FrontLeftEncoder.getDistance(),FrontRightEncoder.getDistance(),BackLeftEncoder.getDistance(),BackRightEncoder.getDistance());
+    Pose2d initialPose = new Pose2d(StartInX,StartInY, AnguloNavX);
+    MecanumDriveWheelPositions initialWheelPositions = new MecanumDriveWheelPositions(FrontLeftEncoder.getDistance(),FrontRightEncoder.getDistance(),RearLeftEncoder.getDistance(),RearRightEncoder.getDistance());
 
     ChasisMecanum.setDeadband(0.02);
     ChasisMecanum.setMaxOutput(1.0);
     ChasisMecanum.setSafetyEnabled(true);
     ChasisMecanum.setExpiration(0.1);
 
+
     xRC_Kinematics = new MecanumDriveKinematics(frontLeftLocation, frontRightLocation, rearLeftLocation, rearRightLocation);
     xRC_Odometry = new MecanumDriveOdometry(xRC_Kinematics, AnguloNavX, initialWheelPositions, initialPose);
    
-
-
 
     //Default
     m_chooser.setDefaultOption("Centro Use(less)", kCenterAuto);
@@ -230,7 +222,6 @@ public class Robot extends TimedRobot {
     m_chooser.addOption("Autonomo Pro", kAutoMuyPro);
     SmartDashboard.putData("Auto choices", m_chooser);
     SmartDashboard.putData("NavX", navx);
-    SmartDashboard.putData("Field", canchaREBUILT);
   }
 
 
@@ -239,28 +230,26 @@ public class Robot extends TimedRobot {
 
     // Store the angle in a variable to avoid redundant calculations
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
-    Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
+
 
     // Actualiza odometría con posiciones en metros
     MecanumDriveWheelPositions wheelPositions = new MecanumDriveWheelPositions(
       FrontLeftEncoder.getDistance(),
       FrontRightEncoder.getDistance(),
-      BackLeftEncoder.getDistance(),
-      BackRightEncoder.getDistance());
+      RearLeftEncoder.getDistance(),
+      RearRightEncoder.getDistance());
 
-    xRC_Odometry.update(Heading, wheelPositions);
-    canchaREBUILT.setRobotPose(xRC_Odometry.getPoseMeters());
+    xRC_Odometry.update(AnguloNavX, wheelPositions);
 
     // Opcional: publicar valores útiles
     SmartDashboard.putNumber("Pose X (m)", xRC_Odometry.getPoseMeters().getX());
     SmartDashboard.putNumber("Pose Y (m)", xRC_Odometry.getPoseMeters().getY());
     SmartDashboard.putNumber("Heading (deg)", AnguloNavX.getDegrees());
     SmartDashboard.putData("Chasis", ChasisMecanum);
-    SmartDashboard.putData("PDP", pdp);
     SmartDashboard.putNumber("Encoder FrontLeft", FrontLeftEncoder.getDistance());
     SmartDashboard.putNumber("Encoder FrontRight", FrontRightEncoder.getDistance());
-    SmartDashboard.putNumber("Encoder BackLeft", BackLeftEncoder.getDistance());
-    SmartDashboard.putNumber("Encoder BackRight", BackRightEncoder.getDistance());
+    SmartDashboard.putNumber("Encoder RearLeft", RearLeftEncoder.getDistance());
+    SmartDashboard.putNumber("Encoder RearRight", RearRightEncoder.getDistance());
     SmartDashboard.putNumber("Elevador", Elevator.getEncoder().getPosition());
     SmartDashboard.putNumber("Shooter", Shooter.getEncoder().getVelocity());
   }
@@ -276,8 +265,8 @@ public class Robot extends TimedRobot {
     
     FrontLeftEncoder.reset();
     FrontRightEncoder.reset();
-    BackLeftEncoder.reset();
-    BackRightEncoder.reset();
+    RearLeftEncoder.reset();
+    RearRightEncoder.reset();
 
   }
 
@@ -396,29 +385,35 @@ public class Robot extends TimedRobot {
     xRC_SlowMode = 1.0;
     FrontLeftEncoder.reset();
     FrontRightEncoder.reset();
-    BackLeftEncoder.reset();
-    BackRightEncoder.reset();
+    RearLeftEncoder.reset();
+    RearRightEncoder.reset();
   }
 
   /** This function is called periodically during operator control. */
   @Override
   public void teleopPeriodic() {
 
-    //Variables Básicas Chasis y Rotaciones Estándar y PID
-    MecanumMove = (-ControlCero.getLeftY()) ;
+     //Variables Básicas Chasis y Rotaciones Estándar y PID
+    double jRot = ControlCero.getRightX();
+    MecanumMove = (-ControlCero.getLeftY());
     MecanumStrafe = ControlCero.getLeftX() * xRC_SlowMode;
-    MecanumRotacionRAW = ControlCero.getRightX();
+    MecanumRotacionRAW = MathUtil.applyDeadband(jRot, 0.05);
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
     Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
 
 
-    //PID Straightmove
+    //PID Straightmove y Hub AutoAim
     if (Math.abs(MecanumRotacionRAW) > 0.02){
       AngleTarget = AnguloNavX.getDegrees();
       MecanumRotacionPID = MecanumRotacionRAW * xRC_SlowMode;
     }
+    else if (ControlCero.getRightTriggerAxis()>=0.3){
+      Translation2d DistanceToHub = (BlueHubPose.getTranslation()).minus((xRC_Odometry.getPoseMeters()).getTranslation());
+      AngleTarget = (DistanceToHub.getAngle()).getDegrees();
+      MecanumRotacionPID = -(pidChassis.calculate(navx.getAngle(), AngleTarget));
+    }
     else{
-      MecanumRotacionPID = MecanumRotacionRAW + (pidChassis.calculate(navx.getAngle(), AngleTarget));
+      MecanumRotacionPID = +(pidChassis.calculate(navx.getAngle(), AngleTarget));
     }
 
     //PIDFF
@@ -436,8 +431,8 @@ public class Robot extends TimedRobot {
     //Velocidad Actual (mps)
     double RealFL = FrontLeftEncoder.getRate();
     double RealFR = FrontRightEncoder.getRate();
-    double RealRL = BackLeftEncoder.getRate();
-    double RealRR = BackRightEncoder.getRate();
+    double RealRL = RearLeftEncoder.getRate();
+    double RealRR = RearRightEncoder.getRate();
 
     //PID (Unitless por sí solo)
     double FL_PID = pidFL.calculate(RealFL, MetaFL);
@@ -472,12 +467,8 @@ public class Robot extends TimedRobot {
 
     FrontLeft.set(OutputFL);
     FrontRight.set(OutputFR);
-    BackLeft.set(OutputRL);
-    BackRight.set(OutputRR);
-
-
-    //Drivetrain
-    ChasisMecanum.driveCartesian(MecanumMove, MecanumStrafe, MecanumRotacionPID, AnguloNavX);
+    RearLeft.set(OutputRL);
+    RearRight.set(OutputRR);
 
     //Reset NAVX
     if (ControlCero.getStartButton() == true) {
@@ -493,7 +484,7 @@ public class Robot extends TimedRobot {
     }
 
     if (ControlCero.getYButton() == true){
-      OrangePID.setSetpoint(6000, ControlType.kVelocity);
+      Shooter.set(1);
     }
     else if (ControlCero.getXButton() == true){
       OrangePID.setSetpoint(-1800, ControlType.kVelocity);
