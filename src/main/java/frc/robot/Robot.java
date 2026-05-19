@@ -24,6 +24,7 @@ import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.controller.SimpleMotorFeedforward;
+import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.wpilibj.drive.MecanumDrive;
 
 import com.revrobotics.spark.SparkMax;
@@ -116,25 +117,27 @@ public class Robot extends TimedRobot {
   Encoder RearRightEncoder = new Encoder(6,7,true, Encoder.EncodingType.k4X); //SIX SEVEN...?
 
   //PID Chassis
-  PIDController pidChassis = new PIDController(0.02, 0.00, 0.00001);
+  PIDController pidChassis = new PIDController(0.05, 0.0, 0.0005);
 
   //PID "Shooter?" y "Elevador?"
   SparkClosedLoopController OrangePID = Shooter.getClosedLoopController();
   SparkClosedLoopController GreenPID = Elevator.getClosedLoopController();
 
   // PID por rueda
-  PIDController pidFL = new PIDController(0.9, 0.0, 0.0001);
-  PIDController pidFR = new PIDController(0.9, 0.0, 0.0001);
-  PIDController pidRL = new PIDController(0.9, 0.0, 0.0001);
-  PIDController pidRR = new PIDController(0.9, 0.0, 0.0001);
+  PIDController pidFL = new PIDController(0.005, 0.0, 0.0);
+  PIDController pidFR = new PIDController(0.005, 0.0, 0.0);
+  PIDController pidRL = new PIDController(0.005, 0.0, 0.0);
+  PIDController pidRR = new PIDController(0.005, 0.0, 0.0);
 
   // Feedforward por rueda (kS, kV, kA) — valores de ejemplo: debes tunear
-  SimpleMotorFeedforward ffFL = new SimpleMotorFeedforward(0.3, 2.2, 0.25);
-  SimpleMotorFeedforward ffFR = new SimpleMotorFeedforward(0.3, 2.2, 0.25);
-  SimpleMotorFeedforward ffRL = new SimpleMotorFeedforward(0.3, 2.2, 0.25);
-  SimpleMotorFeedforward ffRR = new SimpleMotorFeedforward(0.3, 2.2, 0.25);
+  SimpleMotorFeedforward ffFL = new SimpleMotorFeedforward(0.3, 2.0, 0.2);
+  SimpleMotorFeedforward ffFR = new SimpleMotorFeedforward(0.3, 2.0, 0.2);
+  SimpleMotorFeedforward ffRL = new SimpleMotorFeedforward(0.3, 2.0, 0.2);
+  SimpleMotorFeedforward ffRR = new SimpleMotorFeedforward(0.3, 2.0, 0.2);
 
-
+  //Slews
+  SlewRateLimiter SlewMOVE = new SlewRateLimiter(3);
+  SlewRateLimiter SlewSTRAFE = new SlewRateLimiter(5);
 
   //Default
   private static final String kCenterAuto = "Auto Centro";
@@ -154,7 +157,16 @@ public class Robot extends TimedRobot {
     FrontRightConfig.inverted(false).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
     FrontLeftConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
 
-    ShooterConfig.inverted(false).idleMode(IdleMode.kBrake).smartCurrentLimit(40);
+    ShooterConfig.inverted(false).idleMode(IdleMode.kCoast).smartCurrentLimit(30);
+    ShooterConfig.closedLoop.p(0.0001).i(0.00001).d(0.001);
+    ShooterConfig.closedLoop.feedForward.kS(0.0).kV(0.015).kA(0.0).kG(0.0).kCos(0.0).kCosRatio(0.0);
+
+    ElevatorConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(30);
+    ElevatorConfig.closedLoop.p(0.1).i(0.0).d(0.0);
+
+    //Aplicar PIDs "Shooter?" y "Elevador?"
+    OrangePID = Shooter.getClosedLoopController();
+    GreenPID = Elevator.getClosedLoopController();
 
     RearRight.configure(RearRightConfig, SparkBase.ResetMode.kResetSafeParameters,
         SparkBase.PersistMode.kPersistParameters);
@@ -244,12 +256,7 @@ public class Robot extends TimedRobot {
     // Opcional: publicar valores útiles
     SmartDashboard.putNumber("Pose X (m)", xRC_Odometry.getPoseMeters().getX());
     SmartDashboard.putNumber("Pose Y (m)", xRC_Odometry.getPoseMeters().getY());
-    SmartDashboard.putNumber("Heading (deg)", AnguloNavX.getDegrees());
     SmartDashboard.putData("Chasis", ChasisMecanum);
-    SmartDashboard.putNumber("Encoder FrontLeft", FrontLeftEncoder.getDistance());
-    SmartDashboard.putNumber("Encoder FrontRight", FrontRightEncoder.getDistance());
-    SmartDashboard.putNumber("Encoder RearLeft", RearLeftEncoder.getDistance());
-    SmartDashboard.putNumber("Encoder RearRight", RearRightEncoder.getDistance());
     SmartDashboard.putNumber("Elevador", Elevator.getEncoder().getPosition());
     SmartDashboard.putNumber("Shooter", Shooter.getEncoder().getVelocity());
   }
@@ -387,6 +394,7 @@ public class Robot extends TimedRobot {
     FrontRightEncoder.reset();
     RearLeftEncoder.reset();
     RearRightEncoder.reset();
+    AngleTarget = navx.getAngle();
   }
 
   /** This function is called periodically during operator control. */
@@ -395,22 +403,22 @@ public class Robot extends TimedRobot {
 
      //Variables Básicas Chasis y Rotaciones Estándar y PID
     double jRot = ControlCero.getRightX();
-    MecanumMove = (-ControlCero.getLeftY());
-    MecanumStrafe = ControlCero.getLeftX() * xRC_SlowMode;
-    MecanumRotacionRAW = MathUtil.applyDeadband(jRot, 0.05);
+    MecanumMove = SlewMOVE.calculate(-ControlCero.getLeftY());
+    MecanumStrafe = SlewSTRAFE.calculate(ControlCero.getLeftX() * xRC_SlowMode);
+    MecanumRotacionRAW = MathUtil.applyDeadband(jRot, 0.03);
     Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
     Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
 
 
     //PID Straightmove y Hub AutoAim
-    if (Math.abs(MecanumRotacionRAW) > 0.02){
+    if (Math.abs(MecanumRotacionRAW) > 0.03){
       AngleTarget = AnguloNavX.getDegrees();
       MecanumRotacionPID = MecanumRotacionRAW * xRC_SlowMode;
     }
     else if (ControlCero.getRightTriggerAxis()>=0.3){
       Translation2d DistanceToHub = (BlueHubPose.getTranslation()).minus((xRC_Odometry.getPoseMeters()).getTranslation());
-      AngleTarget = (DistanceToHub.getAngle()).getDegrees();
-      MecanumRotacionPID = -(pidChassis.calculate(navx.getAngle(), AngleTarget));
+      AngleTarget = -(DistanceToHub.getAngle()).getDegrees();
+      MecanumRotacionPID = (pidChassis.calculate(navx.getAngle(), AngleTarget));
     }
     else{
       MecanumRotacionPID = +(pidChassis.calculate(navx.getAngle(), AngleTarget));
@@ -473,8 +481,12 @@ public class Robot extends TimedRobot {
     //Reset NAVX
     if (ControlCero.getStartButton() == true) {
       navx.reset();
+      AngleTarget = 0.0;
+      pidChassis.reset();
     }   
 
+    SmartDashboard.putNumber("Velo Act", FrontRightEncoder.getRate());
+    SmartDashboard.putNumber("Velo Meta", wheelSpeeds.frontRightMetersPerSecond);
 
     //SlowMode estilo xRC
     if ((ControlCero.getLeftBumperButton() == true) || (ControlCero.getRightBumperButton() == true)) {
