@@ -18,8 +18,7 @@ import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.wpilibj.Encoder;
-import edu.wpi.first.wpilibj.RobotController;
+import edu.wpi.first.wpilibj.Encoder; 
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
@@ -65,12 +64,15 @@ import com.studica.frc.AHRS;
 
 
 public class Robot extends TimedRobot {
-  //Variables
+  //Variables CAN_ID Chasis
   int RearRightID = 2;
   int RearLeftID = 3;
   int FrontRightID = 4;
   int FrontLeftID = 5;
+
+  //Variables PIDrive
   double kMaxSpeedWheel = 6.0;
+  double MaxVolts = 12.0;
 
   //Sparkmaxes
   SparkMax RearRight = new SparkMax(RearRightID, MotorType.kBrushed);
@@ -98,13 +100,23 @@ public class Robot extends TimedRobot {
   //Declarar Timer para Autonomos
   Timer kronos = new Timer(); //KORG referencia!
 
-  //Valores decimales
+  //Valores decimales:
+
+  //Rotación en autónomo
   double RotAuto;
+  //Modo lento como el del xRC Simulator
   double xRC_SlowMode;
+  //Chasis Joystick RAW
+  double jMove;
+  double jStrafe;
+  double jRot;
+  //Chasis Joystick Real
   double MecanumMove;
   double MecanumStrafe;
   double MecanumRotacionRAW;
+  //Rotacion hipertuneada
   double MecanumRotacionPID;
+  //Ángulo para autocorrector de pose
   double AngleTarget;
   
   //Coordenadas de Inicio
@@ -143,6 +155,7 @@ public class Robot extends TimedRobot {
   //Slews
   SlewRateLimiter SlewMOVE = new SlewRateLimiter(8);
   SlewRateLimiter SlewSTRAFE = new SlewRateLimiter(4);
+  SlewRateLimiter SlewROTATE = new SlewRateLimiter(6);
 
   //UI Escojer Autonomos
   private static final String kCenterAuto = "Auto Centro";
@@ -158,40 +171,76 @@ public class Robot extends TimedRobot {
   public Robot() {
     //Configurar los Sparks
     RearRightConfig.inverted(false).idleMode(IdleMode.kBrake)
-    .smartCurrentLimit(40).voltageCompensation(12);
+    .smartCurrentLimit(40).voltageCompensation(MaxVolts);
     RearLeftConfig.inverted(true).idleMode(IdleMode.kBrake)
-    .smartCurrentLimit(40).voltageCompensation(12);
+    .smartCurrentLimit(40).voltageCompensation(MaxVolts);
     FrontRightConfig.inverted(false).idleMode(IdleMode.kBrake)
-    .smartCurrentLimit(40).voltageCompensation(12);
+    .smartCurrentLimit(40).voltageCompensation(MaxVolts);
     FrontLeftConfig.inverted(true).idleMode(IdleMode.kBrake)
-    .smartCurrentLimit(40).voltageCompensation(12);
+    .smartCurrentLimit(40).voltageCompensation(MaxVolts);
 
     //Configurar el Shooter
-    ShooterConfig.inverted(false).idleMode(IdleMode.kCoast).smartCurrentLimit(30);
-    ShooterConfig.closedLoop.p(0.0001).i(0.00001).d(0.001);
-    ShooterConfig.closedLoop.feedForward.kS(0.0).kV(0.015).kA(0.0);
+    ShooterConfig.inverted(false).idleMode(IdleMode.kCoast)
+    .smartCurrentLimit(30);
+    
+    ShooterConfig.closedLoop.
+      p(0.0001).
+      i(0.00001).
+      d(0.001)
+    ;
+
+    ShooterConfig.closedLoop.feedForward
+      .kS(0.0)
+      .kV(0.015)
+      .kA(0.0)
+    ;
 
     //Configurar el elevador
-    ElevatorConfig.inverted(true).idleMode(IdleMode.kBrake).smartCurrentLimit(30);
-    ElevatorConfig.closedLoop.p(0.1).i(0.0).d(0.0);
+    ElevatorConfig.inverted(true).idleMode(IdleMode.kBrake)
+    .smartCurrentLimit(30);
+
+    ElevatorConfig.closedLoop.
+      p(0.1).
+      i(0.0).
+      d(0.0)
+    ;
 
     //Aplicar PIDs "Shooter?" y "Elevador?"
     OrangePID = Shooter.getClosedLoopController();
     GreenPID = Elevator.getClosedLoopController();
 
     //Configurar Sparks
-    RearRight.configure(RearRightConfig, SparkBase.ResetMode.kResetSafeParameters,
-        SparkBase.PersistMode.kPersistParameters);
-    RearLeft.configure(RearLeftConfig, SparkBase.ResetMode.kResetSafeParameters,
-        SparkBase.PersistMode.kPersistParameters);
-    FrontRight.configure(FrontRightConfig, SparkBase.ResetMode.kResetSafeParameters,
-        SparkBase.PersistMode.kPersistParameters);
-    FrontLeft.configure(FrontLeftConfig, SparkBase.ResetMode.kResetSafeParameters,
-        SparkBase.PersistMode.kPersistParameters);
-    Shooter.configure(ShooterConfig, SparkBase.ResetMode.kResetSafeParameters,
-        SparkBase.PersistMode.kPersistParameters);
-    Elevator.configure(ElevatorConfig, SparkBase.ResetMode.kResetSafeParameters,
-        SparkBase.PersistMode.kPersistParameters);
+    RearRight.configure(
+      RearRightConfig, 
+      SparkBase.ResetMode.kResetSafeParameters,
+      SparkBase.PersistMode.kPersistParameters
+    );
+    RearLeft.configure(
+      RearLeftConfig, 
+      SparkBase.ResetMode.kResetSafeParameters,
+      SparkBase.PersistMode.kPersistParameters
+    );
+    FrontRight.configure(
+      FrontRightConfig, 
+      SparkBase.ResetMode.kResetSafeParameters,
+      SparkBase.PersistMode.kPersistParameters
+    );
+    FrontLeft.configure(
+      FrontLeftConfig, 
+      SparkBase.ResetMode.kResetSafeParameters,
+      SparkBase.PersistMode.kPersistParameters
+    );
+    Shooter.configure(
+      ShooterConfig, 
+      SparkBase.ResetMode.kResetSafeParameters,
+      SparkBase.PersistMode.kPersistParameters
+    );
+    Elevator.configure(
+      ElevatorConfig, 
+      SparkBase.ResetMode.kResetSafeParameters,
+      SparkBase.PersistMode.kPersistParameters
+    );
+
     //Configurar Encoders
     FrontLeftEncoder.setSamplesToAverage(10);
     FrontLeftEncoder.setDistancePerPulse(1.0 / 360 * (Math.PI * 6) * 0.0254); //Conversión a metros
@@ -220,7 +269,12 @@ public class Robot extends TimedRobot {
     pidChassis.isContinuousInputEnabled();
 
     //Declarar chasis
-    ChasisMecanum = new MecanumDrive(FrontLeft, RearLeft, FrontRight, RearRight);
+    ChasisMecanum = new MecanumDrive(
+      FrontLeft, 
+      RearLeft, 
+      FrontRight, 
+      RearRight
+    );
 
     //Ubicación llantas
     Translation2d frontLeftLocation = new Translation2d(0.29, 0.29);
@@ -232,7 +286,12 @@ public class Robot extends TimedRobot {
     //Pose inicial del robot
     Pose2d initialPose = new Pose2d(StartInX, StartInY, Heading);
     //Declarar posiciones de las llantas al iniciar
-    MecanumDriveWheelPositions initialWheelPositions = new MecanumDriveWheelPositions(FrontLeftEncoder.getDistance(),FrontRightEncoder.getDistance(),RearLeftEncoder.getDistance(),RearRightEncoder.getDistance());
+    MecanumDriveWheelPositions initialWheelPositions = new MecanumDriveWheelPositions(
+      FrontLeftEncoder.getDistance(),
+      FrontRightEncoder.getDistance(),
+      RearLeftEncoder.getDistance(),
+      RearRightEncoder.getDistance()
+    );
 
     //Ajustes chasis
     ChasisMecanum.setDeadband(0.02);
@@ -241,10 +300,19 @@ public class Robot extends TimedRobot {
     ChasisMecanum.setExpiration(0.1);
 
     //Declarar Cinemáticas y Odometría
-    xRC_Kinematics = new MecanumDriveKinematics(frontLeftLocation, frontRightLocation, rearLeftLocation, rearRightLocation);
-    xRC_Odometry = new MecanumDriveOdometry(xRC_Kinematics, Heading, initialWheelPositions, initialPose);
+    xRC_Kinematics = new MecanumDriveKinematics(
+      frontLeftLocation, 
+      frontRightLocation, 
+      rearLeftLocation, 
+      rearRightLocation
+    );
+    xRC_Odometry = new MecanumDriveOdometry(
+      xRC_Kinematics, 
+      Heading, 
+      initialWheelPositions, 
+      initialPose
+    );
    
-
     //Configurar lista de Autónomos
     m_chooser.setDefaultOption("Centro Use(less)", kCenterAuto);
     m_chooser.addOption("Simple Swipe Full Trench DERECHA", kTimerAutoDerecha);
@@ -432,27 +500,43 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopPeriodic() {
 
-    //Rotación RAW para cálculos
-    double jRot = ControlCero.getRightX();
-    MecanumMove = SlewMOVE.calculate(-ControlCero.getLeftY());
-    MecanumStrafe = SlewSTRAFE.calculate(ControlCero.getLeftX() * xRC_SlowMode);
-    MecanumRotacionRAW = MathUtil.applyDeadband(jRot, 0.03);
-    Rotation2d AnguloNavX = Rotation2d.fromDegrees(navx.getAngle());
+    //Datos RAW para cálculos
+    jMove = -(ControlCero.getLeftY());
+    jStrafe = ControlCero.getLeftX() * xRC_SlowMode;
+    jRot = ControlCero.getRightX();
+
+    //Los datos buenos para control
+    MecanumMove = SlewMOVE.calculate(jMove);
+    MecanumStrafe = SlewSTRAFE.calculate(jStrafe);
+    MecanumRotacionRAW = SlewROTATE.calculate(jRot);
+
+    //El Heading CCW otra vez...
     Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
 
 
-    //PID Straightmove y Hub AutoAim
-    if (Math.abs(MecanumRotacionRAW) > 0){
-      AngleTarget = AnguloNavX.getDegrees();
+    //PID Straightmove
+    if (Math.abs(MecanumRotacionRAW) > 0.02){
+      AngleTarget = Heading.getDegrees();
       MecanumRotacionPID = MecanumRotacionRAW * xRC_SlowMode;
     }
     else{
-      MecanumRotacionPID = (pidChassis.calculate(AnguloNavX.getDegrees(), AngleTarget));
+      MecanumRotacionPID = (pidChassis.calculate(Heading.getDegrees(), AngleTarget));
     }
 
     //PIDFF
-    ChassisSpeeds chassisSpeeds = new ChassisSpeeds(MecanumMove*kMaxSpeedWheel, MecanumStrafe*-kMaxSpeedWheel, MecanumRotacionPID*-kMaxSpeedWheel);
-    chassisSpeeds = ChassisSpeeds.fromFieldRelativeSpeeds(chassisSpeeds.vxMetersPerSecond, chassisSpeeds.vyMetersPerSecond, chassisSpeeds.omegaRadiansPerSecond, Heading);
+    ChassisSpeeds chassisSpeeds = new ChassisSpeeds(
+      MecanumMove*kMaxSpeedWheel, 
+      MecanumStrafe*-kMaxSpeedWheel, 
+      MecanumRotacionPID*-kMaxSpeedWheel);
+
+    if (!ControlCero.getLeftBumperButton() == true){  
+    chassisSpeeds = ChassisSpeeds.fromFieldRelativeSpeeds(
+      chassisSpeeds.vxMetersPerSecond, 
+      chassisSpeeds.vyMetersPerSecond, 
+      chassisSpeeds.omegaRadiansPerSecond, 
+      Heading);
+    }
+
     MecanumDriveWheelSpeeds wheelSpeeds = xRC_Kinematics.toWheelSpeeds(chassisSpeeds);
     wheelSpeeds.desaturate(kMaxSpeedWheel);
 
@@ -486,24 +570,23 @@ public class Robot extends TimedRobot {
     double VoltsRL = RL_FF + RL_PID;
     double VoltsRR = RR_FF + RR_PID;
 
-    //Compensación por estatus de bateria
-    double pila = RobotController.getBatteryVoltage();
-    double PercentFL = MathUtil.clamp(VoltsFL/pila, -1.0, 1.0);
-    double PercentFR = MathUtil.clamp(VoltsFR/pila, -1.0, 1.0);
-    double PercentRL = MathUtil.clamp(VoltsRL/pila, -1.0, 1.0);
-    double PercentRR = MathUtil.clamp(VoltsRR/pila, -1.0, 1.0);
+    //Ajustar límites de voltaje al motor
+    double PercentFL = MathUtil.clamp(VoltsFL, -MaxVolts, MaxVolts);
+    double PercentFR = MathUtil.clamp(VoltsFR, -MaxVolts, MaxVolts);
+    double PercentRL = MathUtil.clamp(VoltsRL, -MaxVolts, MaxVolts);
+    double PercentRR = MathUtil.clamp(VoltsRR, -MaxVolts, MaxVolts);
 
-    //Establecer control de motores ya con PID
+    //Establecer control de motores ya con PID a otra variable más lógica
     double OutputFL = PercentFL;
     double OutputFR = PercentFR;
     double OutputRL = PercentRL;
     double OutputRR = PercentRR;
 
     //Mandar el dato a cada motor
-    FrontLeft.set(OutputFL);
-    FrontRight.set(OutputFR);
-    RearLeft.set(OutputRL);
-    RearRight.set(OutputRR);
+    FrontLeft.setVoltage(OutputFL);
+    FrontRight.setVoltage(OutputFR);
+    RearLeft.setVoltage(OutputRL);
+    RearRight.setVoltage(OutputRR);
 
     //Resetear Giroscopio
     if (ControlCero.getStartButton() == true) {
@@ -517,7 +600,7 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("Velo Meta", wheelSpeeds.frontRightMetersPerSecond);
 
     //SlowMode estilo xRC Simulator
-    if ((ControlCero.getLeftBumperButton() == true) || (ControlCero.getRightBumperButton() == true)) {
+    if (ControlCero.getRightBumperButton() == true) {
       xRC_SlowMode = 0.5;
     } else {
       xRC_SlowMode = 1;
