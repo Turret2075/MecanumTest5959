@@ -133,6 +133,10 @@ public class Robot extends TimedRobot {
   double StartInX = 4.525;
   double StartInY = 0.650;
   
+  //Coordenadas de simulación
+  double SimX = 4.525;
+  double SimY = 0.650;
+
   //Shooter y Elevador
   SparkMax Shooter = new SparkMax(9, MotorType.kBrushless);
   SparkMax Elevator = new SparkMax(10, MotorType.kBrushless);
@@ -184,6 +188,18 @@ public class Robot extends TimedRobot {
   SimpleMotorFeedforward ffFR = new SimpleMotorFeedforward(kS_wheel, kV_wheel, kA_wheel);
   SimpleMotorFeedforward ffRL = new SimpleMotorFeedforward(kS_wheel, kV_wheel, kA_wheel);
   SimpleMotorFeedforward ffRR = new SimpleMotorFeedforward(kS_wheel, kV_wheel, kA_wheel);
+
+  //Variables para telemetría de velocidad
+  //Velocidades meta (explicado más adelante)
+  double MetaFL;
+  double MetaFR;
+  double MetaRL;
+  double MetaRR;
+  //Velocidades reales (explicado más adelante)
+  double RealFL;
+  double RealFR;
+  double RealRL;
+  double RealRR;
 
   //Slews
   SlewRateLimiter SlewMOVE = new SlewRateLimiter(8);
@@ -328,7 +344,7 @@ public class Robot extends TimedRobot {
     Translation2d rearLeftLocation = new Translation2d(-0.29, 0.29);
     Translation2d rearRightLocation = new Translation2d(-0.29, -0.29);
 
-    //Giroscopio CCW o Virtual para odometría
+    //Giroscopio CCW o Virtual para iniciar odometría
     if (RobotBase.isReal()){
       Heading = Rotation2d.fromDegrees(-navx.getAngle());
     }
@@ -382,8 +398,13 @@ public class Robot extends TimedRobot {
   @Override
   public void robotPeriodic() {
 
-    //Volvemos a declarar HEADING CCW para cálculos
-    Heading = Rotation2d.fromDegrees(-navx.getAngle());
+    //Giroscopio CCW o Virtualgyro para actualizar la odometría
+    if (RobotBase.isReal()){
+      Heading = Rotation2d.fromDegrees(-navx.getAngle());
+    }
+    else{
+      Heading = Rotation2d.fromDegrees(gSimNavX.getAngle());
+    }
 
     // Actualiza odometría con posiciones en metros
     MecanumDriveWheelPositions wheelPositions = new MecanumDriveWheelPositions(
@@ -398,15 +419,48 @@ public class Robot extends TimedRobot {
     //Proyectamos el robot en la cancha virtual de la UI
     canchaREBUILT.setRobotPose(xRC_Odometry.getPoseMeters());
 
-    //Publicar valores útiles
-    SmartDashboard.putNumber("Pose X (m)", xRC_Odometry.getPoseMeters().getX());
-    SmartDashboard.putNumber("Pose Y (m)", xRC_Odometry.getPoseMeters().getY());
-    SmartDashboard.putData("Chasis", ChasisMecanum);
+    //------------------------Publicar valores útiles------------------------------
+
+    //Pose XY del robot
+    SmartDashboard.putNumber("RobotPose/Pose X (m)", xRC_Odometry.getPoseMeters().getX());
+    SmartDashboard.putNumber("RobotPose/Pose Y (m)", xRC_Odometry.getPoseMeters().getY());
+
+    //Objeto Chasis
+    SmartDashboard.putData("Mecanum", ChasisMecanum);
+
+    //Posición del "Elevador"
     SmartDashboard.putNumber("Elevador", Elevator.getEncoder().getPosition());
+
+    //Velocidad del "Shooter"
     SmartDashboard.putNumber("Shooter", Shooter.getEncoder().getVelocity());
+
+    //Proyectar la cancha
     SmartDashboard.putData("Cancha", canchaREBUILT);
-    SmartDashboard.putNumber("NavX", -navx.getAngle());
+
+    //Obtener voltaje de pila
     SmartDashboard.putNumber("Batería", RobotController.getBatteryVoltage());
+
+    //Mostrar control
+    SmartDashboard.putData("Control", ControlCero);
+
+        
+    //--------------------------Telemetría teleop-------------------------------
+
+    //Ángulo actual y meta
+    SmartDashboard.putNumber("AngulosChasis/Heading", Heading.getDegrees());
+    SmartDashboard.putNumber("AngulosChasis/AngleTarget", AngleTarget);
+    
+    //Velocidades Meta
+    SmartDashboard.putNumber("TargetSpeeds/Meta_FL", MetaFL);
+    SmartDashboard.putNumber("TargetSpeeds/Meta_FR", MetaFR);
+    SmartDashboard.putNumber("TargetSpeeds/Meta_RL", MetaRL);
+    SmartDashboard.putNumber("TargetSpeeds/Meta_RR", MetaRR);
+    
+    //Velocidades Reales
+    SmartDashboard.putNumber("RealSpeeds/Real_FL", RealFL);
+    SmartDashboard.putNumber("RealSpeeds/Real_FR", RealFR);
+    SmartDashboard.putNumber("RealSpeeds/Real_RL", RealRL);
+    SmartDashboard.putNumber("RealSpeeds/Real_RR", RealRR);
   }
 
 
@@ -560,14 +614,10 @@ public class Robot extends TimedRobot {
     jStrafe = ControlCero.getLeftX() * xRC_SlowMode;
     jRot = ControlCero.getRightX();
 
-    //Los datos buenos para control
+    //Los datos buenos para el control
     MecanumMove = SlewMOVE.calculate(jMove);
     MecanumStrafe = SlewSTRAFE.calculate(jStrafe);
     MecanumRotacionRAW = SlewROTATE.calculate(jRot);
-
-    //El Heading CCW otra vez...
-    Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
-
 
     //PID Straightmove
     if (Math.abs(MecanumRotacionRAW) > 0.02){
@@ -598,16 +648,16 @@ public class Robot extends TimedRobot {
     wheelSpeeds.desaturate(kMaxSpeedWheel);
 
     //Velocidad Meta en M/s (A cuánto queremos ir)
-    double MetaFL = wheelSpeeds.frontLeftMetersPerSecond;
-    double MetaFR = wheelSpeeds.frontRightMetersPerSecond;
-    double MetaRL = wheelSpeeds.rearLeftMetersPerSecond;
-    double MetaRR = wheelSpeeds.rearRightMetersPerSecond;
+    MetaFL = wheelSpeeds.frontLeftMetersPerSecond;
+    MetaFR = wheelSpeeds.frontRightMetersPerSecond;
+    MetaRL = wheelSpeeds.rearLeftMetersPerSecond;
+    MetaRR = wheelSpeeds.rearRightMetersPerSecond;
     
     //Velocidad Actual en M/s (A cuánto realmente vamos)
-    double RealFL = FrontLeftEncoder.getRate();
-    double RealFR = FrontRightEncoder.getRate();
-    double RealRL = RearLeftEncoder.getRate();
-    double RealRR = RearRightEncoder.getRate();
+    RealFL = FrontLeftEncoder.getRate();
+    RealFR = FrontRightEncoder.getRate();
+    RealRL = RearLeftEncoder.getRate();
+    RealRR = RearRightEncoder.getRate();
 
     //PID (Unitless por sí solo)
     double FL_PID = pidFL.calculate(RealFL, MetaFL);
@@ -651,23 +701,6 @@ public class Robot extends TimedRobot {
       AngleTarget = 0.0;
       pidChassis.reset();
     }
-    
-    //Telemetría teleop
-
-    //Ángulo actual y meta
-    SmartDashboard.putNumber("Chasis/Heading_Grados", Heading.getDegrees());
-    SmartDashboard.putNumber("Chasis/AngleTarget", AngleTarget);
-    
-    //Velocidades Meta
-    SmartDashboard.putNumber("Llantas/Meta_FL", MetaFL);
-    SmartDashboard.putNumber("Llantas/Meta_FR", MetaFR);
-    SmartDashboard.putNumber("Llantas/Meta_RL", MetaRL);
-    SmartDashboard.putNumber("Llantas/Meta_RR", MetaRR);
-    
-    //Velocidades Reales
-    SmartDashboard.putNumber("Llantas/Real_FR", RealFR);
-    SmartDashboard.putNumber("Llantas/Real_RL", RealRL);
-    SmartDashboard.putNumber("Llantas/Real_RR", RealRR);
 
     //SlowMode estilo xRC Simulator
     if (ControlCero.getRightBumperButton() == true) {
@@ -757,5 +790,35 @@ public class Robot extends TimedRobot {
     
     //Actualizar el VirtualGyro
     gSimNavX.setAngle(gSimNavX.getAngle() + DeltaDegrees);
+
+    //Cinemática inversa para mover el robot en la simulación
+    double VeloX = chassisSpeeds.vxMetersPerSecond * 0.02; // Convertir a distancia por ciclo de la RoboRIO
+    double VeloY = chassisSpeeds.vyMetersPerSecond * 0.02; // Convertir a distancia por ciclo de la RoboRIO
+    
+    //Ajustamos VeloX y VeloY para simular
+    VeloX = VeloX * 0.95;
+    VeloY = VeloY * 0.55;
+
+    //Obtener ángulo actual del robot en la simulación
+    double RadiansSim = Heading.getRadians();
+
+    //Cinemática inversa que calcula velocidad Field Centric
+    double KinematicsInX = VeloX * Math.cos(RadiansSim) - VeloY * Math.sin(RadiansSim);
+    double KinematicsInY = VeloX * Math.sin(RadiansSim) + VeloY * Math.cos(RadiansSim);
+
+    //Actualizar la posición del robot en la simulación
+    SimX += KinematicsInX;
+    SimY += KinematicsInY;
+
+    //Actualizar la pose del robot en la simulación
+    Pose2d SimPose = new Pose2d(SimX, SimY, Heading);
+    canchaREBUILT.setRobotPose(SimPose);
+
+    //Publicar Veldades y Poses a Dashboard
+    SmartDashboard.putNumber("SimSpeeds/SimSpeedX", chassisSpeeds.vxMetersPerSecond);
+    SmartDashboard.putNumber("SimSpeeds/SimSpeedY", chassisSpeeds.vyMetersPerSecond);
+    SmartDashboard.putNumber("SimPose/SimPoseX", SimX);
+    SmartDashboard.putNumber("SimPose/SimPoseY", SimY);
+    SmartDashboard.putNumber("GiroRadianes", RadiansSim);
   } 
 }
