@@ -5,6 +5,7 @@
 
 package frc.robot;
 
+//Librerías WPI estándar
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
@@ -18,7 +19,8 @@ import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.wpilibj.Encoder; 
+import edu.wpi.first.wpilibj.Encoder;
+import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
@@ -26,19 +28,23 @@ import edu.wpi.first.math.controller.SimpleMotorFeedforward;
 import edu.wpi.first.math.filter.SlewRateLimiter;
 import edu.wpi.first.wpilibj.drive.MecanumDrive;
 
+//Librerías SparkMax
 import com.revrobotics.spark.SparkMax;
 import com.revrobotics.spark.SparkBase.ControlType;
-
-
 import com.revrobotics.spark.SparkBase;
 import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkMaxConfig;
 
-
-
+//Librería NavX
 import com.studica.frc.AHRS;
+
+//Librerías Simulación
+import edu.wpi.first.wpilibj.simulation.EncoderSim;
+import edu.wpi.first.wpilibj.simulation.AnalogGyroSim;
+import edu.wpi.first.wpilibj.RobotBase;
+
 /*====================================================
     Red CAN (ID . Dispositivo)
     ==========================
@@ -71,8 +77,8 @@ public class Robot extends TimedRobot {
   int FrontLeftID = 5;
 
   //Variables PIDrive
-  double kMaxSpeedWheel = 6.0;
-  double MaxVolts = 12.0;
+  double kMaxSpeedWheel = 3.2; //Velocidad pico del chasis en la alfombra
+  double MaxVolts = 12.0; //Voltaje máximo meta a los sparks
 
   //Sparkmaxes
   SparkMax RearRight = new SparkMax(RearRightID, MotorType.kBrushed);
@@ -92,8 +98,12 @@ public class Robot extends TimedRobot {
   MecanumDriveKinematics xRC_Kinematics;
   MecanumDriveOdometry xRC_Odometry;
 
-  //Giroscopio
+  //Giroscopio y su ángulo para pose y cálculos
   AHRS navx = new AHRS(AHRS.NavXComType.kMXP_SPI);
+  Rotation2d Heading;
+
+  //Giroscopio Virtual
+  AnalogGyroSim gSimNavX;
 
   //Importar Campo
   Field2d canchaREBUILT = new Field2d();
@@ -122,40 +132,67 @@ public class Robot extends TimedRobot {
   //Coordenadas de Inicio
   double StartInX = 4.525;
   double StartInY = 0.650;
-
+  
+  //Shooter y Elevador
   SparkMax Shooter = new SparkMax(9, MotorType.kBrushless);
   SparkMax Elevator = new SparkMax(10, MotorType.kBrushless);
   SparkMaxConfig ShooterConfig = new SparkMaxConfig();
   SparkMaxConfig ElevatorConfig = new SparkMaxConfig();
 
+  //Encoders Reales
   Encoder FrontLeftEncoder = new Encoder(0,1,false, Encoder.EncodingType.k4X);
   Encoder RearLeftEncoder = new Encoder(8,9,false, Encoder.EncodingType.k4X);
   Encoder FrontRightEncoder = new Encoder(4,5,true, Encoder.EncodingType.k4X);
   Encoder RearRightEncoder = new Encoder(6,7,true, Encoder.EncodingType.k4X); //SIX SEVEN...?
 
+  //Encoders Virtuales
+  EncoderSim
+    eSimFL,
+    eSimFR,
+    eSimRL,
+    eSimRR
+    ;
+
+  //Valores PID Llantas
+  double kP_wheel = 0.01;
+  double kI_wheel = 0.0;
+  double kD_wheel = 0.0;
+  double kS_wheel = 0.4;
+  double kV_wheel = 3.2;
+  double kA_wheel = 0.0;
+
+  //Valores PID Rotación
+  double kP_chassis = 0.028;
+  double kI_chassis = 0.0;
+  double kD_chassis = 0.0032;
+
   //PID Chassis
-  PIDController pidChassis = new PIDController(0.04, 0.0, 0.001);
+  PIDController pidChassis = new PIDController(kP_chassis, kI_chassis, kD_chassis);
 
   //PID "Shooter?" y "Elevador?"
   SparkClosedLoopController OrangePID;
   SparkClosedLoopController GreenPID;
 
   // PID por rueda
-  PIDController pidFL = new PIDController(0.0001, 0.0, 0.0);
-  PIDController pidFR = new PIDController(0.0001, 0.0, 0.0);
-  PIDController pidRL = new PIDController(0.0001, 0.0, 0.0);
-  PIDController pidRR = new PIDController(0.0001, 0.0, 0.0);
+  PIDController pidFL = new PIDController(kP_wheel, kI_wheel, kD_wheel);
+  PIDController pidFR = new PIDController(kP_wheel, kI_wheel, kD_wheel);
+  PIDController pidRL = new PIDController(kP_wheel, kI_wheel, kD_wheel);
+  PIDController pidRR = new PIDController(kP_wheel, kI_wheel, kD_wheel);
 
   // Feedforward por rueda (kS, kV, kA) — valores de ejemplo: debes tunear
-  SimpleMotorFeedforward ffFL = new SimpleMotorFeedforward(0.3, 2.0, 0.2);
-  SimpleMotorFeedforward ffFR = new SimpleMotorFeedforward(0.3, 2.0, 0.2);
-  SimpleMotorFeedforward ffRL = new SimpleMotorFeedforward(0.3, 2.0, 0.2);
-  SimpleMotorFeedforward ffRR = new SimpleMotorFeedforward(0.3, 2.0, 0.2);
+  SimpleMotorFeedforward ffFL = new SimpleMotorFeedforward(kS_wheel, kV_wheel, kA_wheel);
+  SimpleMotorFeedforward ffFR = new SimpleMotorFeedforward(kS_wheel, kV_wheel, kA_wheel);
+  SimpleMotorFeedforward ffRL = new SimpleMotorFeedforward(kS_wheel, kV_wheel, kA_wheel);
+  SimpleMotorFeedforward ffRR = new SimpleMotorFeedforward(kS_wheel, kV_wheel, kA_wheel);
 
   //Slews
   SlewRateLimiter SlewMOVE = new SlewRateLimiter(8);
   SlewRateLimiter SlewSTRAFE = new SlewRateLimiter(4);
-  SlewRateLimiter SlewROTATE = new SlewRateLimiter(6);
+  SlewRateLimiter SlewROTATE = new SlewRateLimiter(8);
+
+  //Velocidades de las ruedas y chasis para simulación y cálculos
+  MecanumDriveWheelSpeeds wheelSpeeds = new MecanumDriveWheelSpeeds(0,0,0,0);
+  ChassisSpeeds chassisSpeeds = new ChassisSpeeds(0,0,0);
 
   //UI Escojer Autonomos
   private static final String kCenterAuto = "Auto Centro";
@@ -182,13 +219,13 @@ public class Robot extends TimedRobot {
     //Configurar el Shooter
     ShooterConfig.inverted(false).idleMode(IdleMode.kCoast)
     .smartCurrentLimit(30);
-    
+    //Declarar PID Shooter
     ShooterConfig.closedLoop.
       p(0.0001).
       i(0.00001).
       d(0.001)
     ;
-
+    //Declarar FF Shooter
     ShooterConfig.closedLoop.feedForward
       .kS(0.0)
       .kV(0.015)
@@ -198,7 +235,7 @@ public class Robot extends TimedRobot {
     //Configurar el elevador
     ElevatorConfig.inverted(true).idleMode(IdleMode.kBrake)
     .smartCurrentLimit(30);
-
+    //Declarar PID Elevador
     ElevatorConfig.closedLoop.
       p(0.1).
       i(0.0).
@@ -262,6 +299,15 @@ public class Robot extends TimedRobot {
     RearRightEncoder.setMinRate(10);
     RearRightEncoder.reset();
 
+    //Configurar VirtualCoders y VirtualGyro
+    if (RobotBase.isSimulation()) {
+      eSimFL = new EncoderSim(FrontLeftEncoder);
+      eSimFR = new EncoderSim(FrontRightEncoder);
+      eSimRL = new EncoderSim(RearLeftEncoder);
+      eSimRR = new EncoderSim(RearRightEncoder);
+      gSimNavX = new AnalogGyroSim(0); 
+    }
+
     //Ajustes PID Rotación (code snippet took from Bea's code)
     pidChassis.enableContinuousInput(-180.0f, 180.0f);
     pidChassis.setIntegratorRange(-1.0, 1.0);
@@ -281,10 +327,18 @@ public class Robot extends TimedRobot {
     Translation2d frontRightLocation = new Translation2d(0.29, -0.29);
     Translation2d rearLeftLocation = new Translation2d(-0.29, 0.29);
     Translation2d rearRightLocation = new Translation2d(-0.29, -0.29);
-    //Giroscopio CCW para odometría
-    Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
+
+    //Giroscopio CCW o Virtual para odometría
+    if (RobotBase.isReal()){
+      Heading = Rotation2d.fromDegrees(-navx.getAngle());
+    }
+    else{
+      Heading = Rotation2d.fromDegrees(gSimNavX.getAngle());
+    }
+
     //Pose inicial del robot
     Pose2d initialPose = new Pose2d(StartInX, StartInY, Heading);
+
     //Declarar posiciones de las llantas al iniciar
     MecanumDriveWheelPositions initialWheelPositions = new MecanumDriveWheelPositions(
       FrontLeftEncoder.getDistance(),
@@ -294,7 +348,7 @@ public class Robot extends TimedRobot {
     );
 
     //Ajustes chasis
-    ChasisMecanum.setDeadband(0.02);
+    ChasisMecanum.setDeadband(0.0125);
     ChasisMecanum.setMaxOutput(1.0);
     ChasisMecanum.setSafetyEnabled(true);
     ChasisMecanum.setExpiration(0.1);
@@ -329,7 +383,7 @@ public class Robot extends TimedRobot {
   public void robotPeriodic() {
 
     //Volvemos a declarar HEADING CCW para cálculos
-    Rotation2d Heading = Rotation2d.fromDegrees(-navx.getAngle());
+    Heading = Rotation2d.fromDegrees(-navx.getAngle());
 
     // Actualiza odometría con posiciones en metros
     MecanumDriveWheelPositions wheelPositions = new MecanumDriveWheelPositions(
@@ -352,6 +406,7 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("Shooter", Shooter.getEncoder().getVelocity());
     SmartDashboard.putData("Cancha", canchaREBUILT);
     SmartDashboard.putNumber("NavX", -navx.getAngle());
+    SmartDashboard.putNumber("Batería", RobotController.getBatteryVoltage());
   }
 
 
@@ -490,7 +545,7 @@ public class Robot extends TimedRobot {
     RearRightEncoder.reset();
 
     //Ajustamos el ángulo actual para evitar problemas tras autónomo
-    AngleTarget = navx.getAngle();
+    AngleTarget = -navx.getAngle();
 
     //SOLO POR PRUEBAS - Reseteamos pose y odom cada vez que arranca teleop
     Pose2d startPose = new Pose2d(StartInX, StartInY, Rotation2d.fromDegrees(-navx.getAngle()));
@@ -520,15 +575,16 @@ public class Robot extends TimedRobot {
       MecanumRotacionPID = MecanumRotacionRAW * xRC_SlowMode;
     }
     else{
-      MecanumRotacionPID = (pidChassis.calculate(Heading.getDegrees(), AngleTarget));
+      MecanumRotacionPID = -(pidChassis.calculate(Heading.getDegrees(), AngleTarget));
     }
 
-    //PIDFF
-    ChassisSpeeds chassisSpeeds = new ChassisSpeeds(
+    //Crear velocidades del chasis
+    chassisSpeeds = new ChassisSpeeds(
       MecanumMove*kMaxSpeedWheel, 
       MecanumStrafe*-kMaxSpeedWheel, 
-      MecanumRotacionPID*-kMaxSpeedWheel);
+      MecanumRotacionPID*-4.5);
 
+    //Toggle para modo Robot Centric
     if (!ControlCero.getLeftBumperButton() == true){  
     chassisSpeeds = ChassisSpeeds.fromFieldRelativeSpeeds(
       chassisSpeeds.vxMetersPerSecond, 
@@ -537,7 +593,8 @@ public class Robot extends TimedRobot {
       Heading);
     }
 
-    MecanumDriveWheelSpeeds wheelSpeeds = xRC_Kinematics.toWheelSpeeds(chassisSpeeds);
+    //Leer velocidades de las llantas y desaturar para no pasar el máximo
+    wheelSpeeds = xRC_Kinematics.toWheelSpeeds(chassisSpeeds);
     wheelSpeeds.desaturate(kMaxSpeedWheel);
 
     //Velocidad Meta en M/s (A cuánto queremos ir)
@@ -593,11 +650,24 @@ public class Robot extends TimedRobot {
       navx.reset();
       AngleTarget = 0.0;
       pidChassis.reset();
-    }   
+    }
+    
+    //Telemetría teleop
 
-    //SOLO POR PRUEBAS - publicar datos para tunear PIDFF por llanta
-    SmartDashboard.putNumber("Velo Act", FrontRightEncoder.getRate());
-    SmartDashboard.putNumber("Velo Meta", wheelSpeeds.frontRightMetersPerSecond);
+    //Ángulo actual y meta
+    SmartDashboard.putNumber("Chasis/Heading_Grados", Heading.getDegrees());
+    SmartDashboard.putNumber("Chasis/AngleTarget", AngleTarget);
+    
+    //Velocidades Meta
+    SmartDashboard.putNumber("Llantas/Meta_FL", MetaFL);
+    SmartDashboard.putNumber("Llantas/Meta_FR", MetaFR);
+    SmartDashboard.putNumber("Llantas/Meta_RL", MetaRL);
+    SmartDashboard.putNumber("Llantas/Meta_RR", MetaRR);
+    
+    //Velocidades Reales
+    SmartDashboard.putNumber("Llantas/Real_FR", RealFR);
+    SmartDashboard.putNumber("Llantas/Real_RL", RealRL);
+    SmartDashboard.putNumber("Llantas/Real_RR", RealRR);
 
     //SlowMode estilo xRC Simulator
     if (ControlCero.getRightBumperButton() == true) {
@@ -654,11 +724,38 @@ public class Robot extends TimedRobot {
 
   @Override
   public void simulationInit() {
-    //Código al iniciar simulación (NO MAPLE, ESTO NO ES SWERVE)
+    //Código al iniciar el modo simulación (NO MAPLE, ESTO NO ES SWERVE)
   }
 
   @Override
   public void simulationPeriodic() {
-    //Código cuando está en modo simulación (NO MAPLE, ESTO NO ES SWERVE)
-  }
+    //Verificar que los objetos de simulación estén inicializados
+    if (
+      eSimFL == null || 
+      eSimFR == null || 
+      eSimRL == null || 
+      eSimRR == null || 
+      gSimNavX == null) 
+      {
+        return; 
+    }
+
+    //Velocidades de las ruedas para simulación (en M/s)
+    double VeloSimFL = wheelSpeeds.frontLeftMetersPerSecond;
+    double VeloSimFR = wheelSpeeds.frontRightMetersPerSecond;
+    double VeloSimRL = wheelSpeeds.rearLeftMetersPerSecond;
+    double VeloSimRR = wheelSpeeds.rearRightMetersPerSecond;
+
+    //Inyectar velocidades a los encoders virtuales
+    eSimFL.setRate(VeloSimFL);
+    eSimFR.setRate(VeloSimFR);
+    eSimRL.setRate(VeloSimRL);
+    eSimRR.setRate(VeloSimRR);
+
+    //Ángulo del giroscopio para simulación y convertirlo a grados
+    double DeltaDegrees = chassisSpeeds.omegaRadiansPerSecond * 0.02 * (180.0 / Math.PI);
+    
+    //Actualizar el VirtualGyro
+    gSimNavX.setAngle(gSimNavX.getAngle() + DeltaDegrees);
+  } 
 }
