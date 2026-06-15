@@ -14,6 +14,7 @@ import edu.wpi.first.math.kinematics.MecanumDriveKinematics;
 import edu.wpi.first.math.kinematics.MecanumDriveOdometry;
 import edu.wpi.first.math.kinematics.MecanumDriveWheelPositions;
 import edu.wpi.first.math.kinematics.MecanumDriveWheelSpeeds;
+import edu.wpi.first.math.estimator.MecanumDrivePoseEstimator;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
@@ -30,9 +31,7 @@ import edu.wpi.first.wpilibj.drive.MecanumDrive;
 
 //Librerias SparkMax
 import com.revrobotics.spark.SparkMax;
-import com.revrobotics.spark.SparkBase.ControlType;
 import com.revrobotics.spark.SparkBase;
-import com.revrobotics.spark.SparkClosedLoopController;
 import com.revrobotics.spark.SparkLowLevel.MotorType;
 import com.revrobotics.spark.config.SparkBaseConfig.IdleMode;
 import com.revrobotics.spark.config.SparkMaxConfig;
@@ -45,6 +44,7 @@ import edu.wpi.first.wpilibj.simulation.EncoderSim;
 import edu.wpi.first.wpilibj.simulation.AnalogGyroSim;
 import edu.wpi.first.wpilibj.RobotBase;
 
+
 /*====================================================
     Red CAN (ID . Dispositivo)
     ==========================
@@ -54,8 +54,8 @@ import edu.wpi.first.wpilibj.RobotBase;
     3 . RearLeft
     4 . FrontRight
     5 . FrontLeft
-    8 . Shooter/Intake
-    9 . Pivot/Elevador
+    9 . Intake TURRET
+    10 . Intake TITANIUM
 
 ======================================================
     Red ENCODERS (PuertoA, PuertoB . Dispositivo)
@@ -89,17 +89,24 @@ public class Robot extends TimedRobot {
   SparkMax FrontRight = new SparkMax(FrontRightID, MotorType.kBrushed);
   SparkMax FrontLeft = new SparkMax(FrontLeftID, MotorType.kBrushed);
 
+  //SparkMaxes intakes
+  SparkMax IntakeFijo = new SparkMax(9, MotorType.kBrushless);
+
   //Ajustes SparkMax chasis
   SparkMaxConfig RearRightConfig = new SparkMaxConfig();
   SparkMaxConfig RearLeftConfig = new SparkMaxConfig();
   SparkMaxConfig FrontRightConfig = new SparkMaxConfig();
   SparkMaxConfig FrontLeftConfig = new SparkMaxConfig();
 
+  //Configuracion SparkMaxes Intakes
+  SparkMaxConfig IntakeFijoConfig = new SparkMaxConfig();
+
   ///Control y Chasis
   XboxController ControlCero = new XboxController(0);
   MecanumDrive ChasisMecanum;
   MecanumDriveKinematics xRC_Kinematics;
   MecanumDriveOdometry xRC_Odometry;
+  MecanumDrivePoseEstimator xRC_PoseEstimator;
 
   //Giroscopio y su angulo para pose y calculos
   AHRS navx = new AHRS(AHRS.NavXComType.kMXP_SPI);
@@ -140,12 +147,6 @@ public class Robot extends TimedRobot {
   double SimX = 4.525;
   double SimY = 0.650;
 
-  //Shooter y Elevador
-  SparkMax Shooter = new SparkMax(9, MotorType.kBrushless);
-  SparkMax Elevator = new SparkMax(10, MotorType.kBrushless);
-  SparkMaxConfig ShooterConfig = new SparkMaxConfig();
-  SparkMaxConfig ElevatorConfig = new SparkMaxConfig();
-
   //Encoders Reales
   Encoder FrontLeftEncoder = new Encoder(0,1,false, Encoder.EncodingType.k4X);
   Encoder RearLeftEncoder = new Encoder(8,9,false, Encoder.EncodingType.k4X);
@@ -165,7 +166,7 @@ public class Robot extends TimedRobot {
   double kI_wheel = 0.0;
   double kD_wheel = 0.0;
   double kS_wheel = 0.4;
-  double kV_wheel = 3.2;
+  double kV_wheel = 3.15;
   double kA_wheel = 0.0;
 
   //Valores PID Rotacion
@@ -175,10 +176,6 @@ public class Robot extends TimedRobot {
 
   //PID Chassis
   PIDController pidChassis = new PIDController(kP_chassis, kI_chassis, kD_chassis);
-
-  //PID "Shooter?" y "Elevador?"
-  SparkClosedLoopController OrangePID;
-  SparkClosedLoopController GreenPID;
 
   // PID por rueda
   PIDController pidFL = new PIDController(kP_wheel, kI_wheel, kD_wheel);
@@ -235,35 +232,8 @@ public class Robot extends TimedRobot {
     FrontLeftConfig.inverted(true).idleMode(IdleMode.kBrake)
     .smartCurrentLimit(40).voltageCompensation(MaxVolts);
 
-    //Configurar el Shooter
-    ShooterConfig.inverted(false).idleMode(IdleMode.kCoast)
+    IntakeFijoConfig.inverted(false).idleMode(IdleMode.kBrake)
     .smartCurrentLimit(30);
-    //Declarar PID Shooter
-    ShooterConfig.closedLoop.
-      p(0.0001).
-      i(0.00001).
-      d(0.001)
-    ;
-    //Declarar FF Shooter
-    ShooterConfig.closedLoop.feedForward
-      .kS(0.0)
-      .kV(0.015)
-      .kA(0.0)
-    ;
-
-    //Configurar el elevador
-    ElevatorConfig.inverted(true).idleMode(IdleMode.kBrake)
-    .smartCurrentLimit(30);
-    //Declarar PID Elevador
-    ElevatorConfig.closedLoop.
-      p(0.1).
-      i(0.0).
-      d(0.0)
-    ;
-
-    //Aplicar PIDs "Shooter?" y "Elevador?"
-    OrangePID = Shooter.getClosedLoopController();
-    GreenPID = Elevator.getClosedLoopController();
 
     //Configurar Sparks
     RearRight.configure(
@@ -286,13 +256,10 @@ public class Robot extends TimedRobot {
       SparkBase.ResetMode.kResetSafeParameters,
       SparkBase.PersistMode.kPersistParameters
     );
-    Shooter.configure(
-      ShooterConfig, 
-      SparkBase.ResetMode.kResetSafeParameters,
-      SparkBase.PersistMode.kPersistParameters
-    );
-    Elevator.configure(
-      ElevatorConfig, 
+
+    //Configurar Intakes
+    IntakeFijo.configure(
+      IntakeFijoConfig, 
       SparkBase.ResetMode.kResetSafeParameters,
       SparkBase.PersistMode.kPersistParameters
     );
@@ -370,22 +337,32 @@ public class Robot extends TimedRobot {
     ChasisMecanum.setDeadband(0.0125);
     ChasisMecanum.setMaxOutput(1.0);
     ChasisMecanum.setExpiration(0.1);
+    ChasisMecanum.setSafetyEnabled(false);
+    ChasisMecanum.feed();
 
-    //Declarar Cinematicas y Odometria
+    //Declarar Cinematicas, Odometria y estimacion de posicion
     xRC_Kinematics = new MecanumDriveKinematics(
       frontLeftLocation, 
       frontRightLocation, 
       rearLeftLocation, 
       rearRightLocation
     );
+
     xRC_Odometry = new MecanumDriveOdometry(
       xRC_Kinematics, 
       Heading, 
       initialWheelPositions, 
       initialPose
     );
+
+    xRC_PoseEstimator = new MecanumDrivePoseEstimator(
+      xRC_Kinematics, 
+      Heading, 
+      initialWheelPositions, 
+      initialPose
+    );
    
-    //Configurar lista de Autonomos
+    //Configurar lista de Autonomos (TIMER)
     m_chooser.setDefaultOption("Centro Use(less)", kCenterAuto);
     m_chooser.addOption("Simple Swipe Full Trench DERECHA", kTimerAutoDerecha);
     m_chooser.addOption("Simple Swipe ENCODED Derecha", kEncodedAutoDerecha);
@@ -418,6 +395,9 @@ public class Robot extends TimedRobot {
     //Actualiza la Odometria
     xRC_Odometry.update(Heading, wheelPositions);
 
+    //Actualizar estimador de pose
+    xRC_PoseEstimator.update(Heading, wheelPositions);
+
     //Proyectamos el robot en la cancha virtual de la UI
     canchaREBUILT.setRobotPose(xRC_Odometry.getPoseMeters());
 
@@ -429,12 +409,6 @@ public class Robot extends TimedRobot {
 
     //Objeto Chasis
     SmartDashboard.putData("Mecanum", ChasisMecanum);
-
-    //Posicion del "Elevador"
-    SmartDashboard.putNumber("Elevador", Elevator.getEncoder().getPosition());
-
-    //Velocidad del "Shooter"
-    SmartDashboard.putNumber("Shooter", Shooter.getEncoder().getVelocity());
 
     //Proyectar la cancha
     SmartDashboard.putData("Cancha", canchaREBUILT);
@@ -512,7 +486,6 @@ public class Robot extends TimedRobot {
         }
         //Disparar ~14-20 fuel
         else{
-          Shooter.set(1);
         }
         break;
 
@@ -565,7 +538,6 @@ public class Robot extends TimedRobot {
         }
         //Disparar ~14-20 fuel
         else{
-          Shooter.set(1);
         }
         break;
 
@@ -578,7 +550,6 @@ public class Robot extends TimedRobot {
         }
         //Disparar Fuel
         else if (kronos.get()<=8){
-          Shooter.set(1);
         }
         break;
 
@@ -629,11 +600,12 @@ public class Robot extends TimedRobot {
       AngleTarget = Heading.getDegrees();
       MecanumRotacionPID = MecanumRotacionRAW * xRC_SlowMode;
     }
-    //Rotacion AutoAIM con cruceta
+    // Rotacion AutoAIM con cruceta
     else if (LockInPOV != -1){
-      AngleTarget = LockInPOV;
-      if (AngleTarget > 180){
-        AngleTarget -= 360;
+      AngleTarget = -LockInPOV; 
+      //Obtenemos angulo coterminal, mate 2 TecMi!
+      if (AngleTarget < -180){
+        AngleTarget = AngleTarget + 360;
       }
       MecanumRotacionPID = -(pidChassis.calculate(Heading.getDegrees(), AngleTarget));
     }
@@ -716,36 +688,15 @@ public class Robot extends TimedRobot {
       pidChassis.reset();
     }
 
-    //SlowMode estilo xRC Simulator
-    if (ControlCero.getRightBumperButton() == true) {
-      xRC_SlowMode = 0.5;
-    } else {
-      xRC_SlowMode = 1;
+    //Toggle intake
+    if (ControlCero.getXButton() == true){
+      IntakeFijo.set(1.0);
     }
-
-    //Setpoints Shooter
-    if (ControlCero.getYButton() == true){
-      OrangePID.setSetpoint(6000, ControlType.kVelocity); //Setpoint SHOOT
-    }
-    else if (ControlCero.getXButton() == true){
-      OrangePID.setSetpoint(-1800, ControlType.kVelocity); //Setpoint INTAKE
+    else if (ControlCero.getBButton() == true){
+      IntakeFijo.set(-0.6);
     }
     else{
-      Shooter.set(0); //Detenemos al no hacer nada
-    }
-
-    //Setpoints Elevador
-    if (ControlCero.getBButton() == true){
-      GreenPID.setSetpoint(0, ControlType.kPosition); //Setpoint HOME
-    }
-    else if (ControlCero.getAButton() == true){
-      GreenPID.setSetpoint(240, ControlType.kPosition); //Setpoint LOW
-    }
-    else if (ControlCero.getLeftStickButton() == true){
-      GreenPID.setSetpoint(675, ControlType.kPosition); //Setpoint MID
-    }
-    else if (ControlCero.getRightStickButton() == true){
-      GreenPID.setSetpoint(1000, ControlType.kPosition); //Setpoint HIGH
+      IntakeFijo.set(0);
     }
   }
 

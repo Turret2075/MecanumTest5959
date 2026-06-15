@@ -7,7 +7,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "DeTrenchParaCentro(R1)"
+            "pathName": "DeBumpParaCentro(R1)"
           }
         },
         {
@@ -19,7 +19,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "DeCentroParaShootearPorTrench(R1)"
+            "pathName": "DeCentroParaShootearPorBump(R1)"
           }
         },
         {

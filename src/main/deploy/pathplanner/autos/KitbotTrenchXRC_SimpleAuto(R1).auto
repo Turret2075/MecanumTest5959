@@ -43,49 +43,7 @@
         {
           "type": "path",
           "data": {
-            "pathName": "DeShootearParaOutpost(R1)"
-          }
-        },
-        {
-          "type": "path",
-          "data": {
-            "pathName": "DeOutpostParaShootear(R1)"
-          }
-        },
-        {
-          "type": "wait",
-          "data": {
-            "waitTime": 0.2
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "Shoot"
-          }
-        },
-        {
-          "type": "wait",
-          "data": {
-            "waitTime": 2.3
-          }
-        },
-        {
-          "type": "path",
-          "data": {
             "pathName": "DeShootearParaTower(R1)"
-          }
-        },
-        {
-          "type": "wait",
-          "data": {
-            "waitTime": 0.2
-          }
-        },
-        {
-          "type": "named",
-          "data": {
-            "name": "PivotStageMax"
           }
         }
       ]
