@@ -48,14 +48,18 @@ import edu.wpi.first.wpilibj.RobotBase;
 /*====================================================
     Red CAN (ID . Dispositivo)
     ==========================
-    0 . roboRIO
+    00 . roboRIO
     
-    2 . RearRight
-    3 . RearLeft
-    4 . FrontRight
-    5 . FrontLeft
-    9 . Intake TURRET
+    02 . RearRight
+    03 . RearLeft
+    04 . FrontRight
+    05 . FrontLeft
+    06 . VICTOR SPX LIBRE
+    07 . VICTOR SPX LIBRE
+    08 . VICTOR SPX LIBRE
+    09 . VICTOR SPX LIBRE
     10 . Intake TITANIUM
+    11 . Intake TURRET
 
 ======================================================
     Red ENCODERS (PuertoA, PuertoB . Dispositivo)
@@ -77,7 +81,7 @@ public class Robot extends TimedRobot {
   int FrontLeftID = 5;
 
   //Variables AimLOCK
-  int LockInPOV; //Guarda los grados en la cruceta (Si, se mide en grados)
+  int LockInPOV; //Guarda los grados de la cruceta (Si, se mide en grados)
 
   //Variables PIDrive
   double kMaxSpeedWheel = 3.2; //Velocidad pico de una llanta del chasis en la alfombra en M/s
@@ -90,7 +94,7 @@ public class Robot extends TimedRobot {
   SparkMax FrontLeft = new SparkMax(FrontLeftID, MotorType.kBrushed);
 
   //SparkMaxes intakes
-  SparkMax IntakeFijo = new SparkMax(9, MotorType.kBrushless);
+  SparkMax IntakeFijo = new SparkMax(11, MotorType.kBrushless);
 
   //Ajustes SparkMax chasis
   SparkMaxConfig RearRightConfig = new SparkMaxConfig();
@@ -100,6 +104,7 @@ public class Robot extends TimedRobot {
 
   //Configuracion SparkMaxes Intakes
   SparkMaxConfig IntakeFijoConfig = new SparkMaxConfig();
+  SparkMaxConfig intakeTITANIUMConfig = new SparkMaxConfig();
 
   ///Control y Chasis
   XboxController ControlCero = new XboxController(0);
@@ -166,7 +171,7 @@ public class Robot extends TimedRobot {
   double kI_wheel = 0.0;
   double kD_wheel = 0.0;
   double kS_wheel = 0.4;
-  double kV_wheel = 3.15;
+  double kV_wheel = 3.2;
   double kA_wheel = 0.0;
 
   //Valores PID Rotacion
@@ -263,7 +268,7 @@ public class Robot extends TimedRobot {
       SparkBase.ResetMode.kResetSafeParameters,
       SparkBase.PersistMode.kPersistParameters
     );
-
+    
     //Configurar Encoders
     FrontLeftEncoder.setSamplesToAverage(10);
     FrontLeftEncoder.setDistancePerPulse(1.0 / 360 * (Math.PI * 6) * 0.0254); //Conversion a metros
