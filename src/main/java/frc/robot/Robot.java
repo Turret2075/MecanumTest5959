@@ -108,6 +108,7 @@ public class Robot extends TimedRobot {
 
   ///Control y Chasis
   XboxController ControlCero = new XboxController(0);
+  XboxController ControlUno = new XboxController(1);
   MecanumDrive ChasisMecanum;
   MecanumDriveKinematics xRC_Kinematics;
   MecanumDriveOdometry xRC_Odometry;
@@ -593,7 +594,7 @@ public class Robot extends TimedRobot {
     jRot = ControlCero.getRightX();
 
     //Asignamos los angulos de la cruceta
-    LockInPOV = ControlCero.getPOV();
+    LockInPOV = ControlUno.getPOV();
 
     //Los datos buenos para el control
     MecanumMove = SlewMOVE.calculate(jMove);
@@ -608,7 +609,7 @@ public class Robot extends TimedRobot {
     // Rotacion AutoAIM con cruceta
     else if (LockInPOV != -1){
       AngleTarget = -LockInPOV; 
-      //Obtenemos angulo coterminal, mate 2 TecMi!
+      //Obtenemos angulo coterminal, apliquense mate 2 TecMi!
       if (AngleTarget < -180){
         AngleTarget = AngleTarget + 360;
       }
@@ -626,7 +627,7 @@ public class Robot extends TimedRobot {
       MecanumRotacionPID*-4.5);
 
     //Toggle para modo Robot Centric
-    if (!ControlCero.getLeftBumperButton() == true){  
+    if (ControlCero.getLeftBumperButton() == false){  
     chassisSpeeds = ChassisSpeeds.fromFieldRelativeSpeeds(
       chassisSpeeds.vxMetersPerSecond, 
       chassisSpeeds.vyMetersPerSecond, 
@@ -694,10 +695,10 @@ public class Robot extends TimedRobot {
     }
 
     //Toggle intake
-    if (ControlCero.getXButton() == true){
+    if (ControlUno.getXButton() == true){
       IntakeFijo.set(1.0);
     }
-    else if (ControlCero.getBButton() == true){
+    else if (ControlUno.getBButton() == true){
       IntakeFijo.set(-0.6);
     }
     else{
