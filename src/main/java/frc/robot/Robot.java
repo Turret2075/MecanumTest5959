@@ -82,6 +82,7 @@ public class Robot extends TimedRobot {
 
   //Variables AimLOCK
   int LockInPOV; //Guarda los grados de la cruceta (Si, se mide en grados)
+  int LastAngle;
 
   //Variables PIDrive
   double kMaxSpeedWheel = 3.2; //Velocidad pico de una llanta del chasis en la alfombra en M/s
@@ -407,6 +408,11 @@ public class Robot extends TimedRobot {
     //Proyectamos el robot en la cancha virtual de la UI
     canchaREBUILT.setRobotPose(xRC_Odometry.getPoseMeters());
 
+    //Storage cruceta para gyro falso de dashboard
+    if (LockInPOV != -1){
+      LastAngle = LockInPOV;
+    }
+
     //------------------------Publicar valores utiles------------------------------
 
     //Pose XY del robot
@@ -423,7 +429,10 @@ public class Robot extends TimedRobot {
     SmartDashboard.putNumber("Bateria", RobotController.getBatteryVoltage());
 
     //Mostrar control
-    SmartDashboard.putData("Control", ControlCero);
+    SmartDashboard.putData("Driver", ControlCero);
+    SmartDashboard.putData("Operator", ControlUno);
+    SmartDashboard.putNumber("AutoAim/Value", LastAngle);
+    SmartDashboard.putString("AutoAim/.type", "Gyro");
 
         
     //--------------------------Telemetria teleop-------------------------------
