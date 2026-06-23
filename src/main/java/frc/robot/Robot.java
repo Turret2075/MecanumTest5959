@@ -58,7 +58,6 @@ import edu.wpi.first.wpilibj.RobotBase;
     07 . VICTOR SPX LIBRE
     08 . VICTOR SPX LIBRE
     09 . VICTOR SPX LIBRE
-    10 . Intake TITANIUM
     11 . Intake TURRET
 
 ======================================================
@@ -104,7 +103,6 @@ public class Robot extends TimedRobot {
 
   //Configuracion SparkMaxes Intakes
   SparkMaxConfig IntakeFijoConfig = new SparkMaxConfig();
-  SparkMaxConfig intakeTITANIUMConfig = new SparkMaxConfig();
 
   ///Control y Chasis
   XboxController ControlCero = new XboxController(0);
@@ -693,6 +691,13 @@ public class Robot extends TimedRobot {
       pidChassis.reset();
     }
 
+    //Slowmode al estilo xRC
+    if (ControlCero.getRightBumperButton() == true){
+      xRC_SlowMode = 0.5;
+    }else{
+      xRC_SlowMode = 1;
+    }
+
     //Toggle intake
     if (ControlCero.getXButton() == true){
       IntakeFijo.set(1.0);
@@ -727,11 +732,6 @@ public class Robot extends TimedRobot {
 
   @Override
   public void simulationInit() {
-    //Codigo al iniciar el modo simulacion (NO MAPLE, ESTO NO ES SWERVE)
-  }
-
-  @Override
-  public void simulationPeriodic() {
     //Verificar que los objetos de simulacion esten inicializados
     if (
       eSimFL == null || 
@@ -742,6 +742,10 @@ public class Robot extends TimedRobot {
       {
         return; 
     }
+  }
+
+  @Override
+  public void simulationPeriodic() {
 
     //Velocidades de las ruedas para simulacion (en M/s)
     double VeloSimFL = wheelSpeeds.frontLeftMetersPerSecond;
